@@ -1,0 +1,529 @@
+/**
+ * 古风水墨主题 - Ancient Chinese Ink Theme
+ * 水墨渐变、宣纸质感、毛笔字体风格
+ */
+
+.theme-ancient-chinese {
+  /* ========== 颜色系统 ========== */
+  --primary: #5d4e4e;          /* 墨色 */
+  --primary-rgb: 93, 78, 78;
+  --secondary: #8b7355;        /* 赭石 */
+  --accent: #c41e3a;           /* 朱红 */
+  --accent-rgb: 196, 30, 58;
+  
+  --background: #f5f0e6;       /* 宣纸 */
+  --surface: #faf6ed;
+  --surface-elevated: #fff;
+  
+  --text: #333;
+  --text-muted: #666;
+  --text-light: #999;
+  
+  --ink-light: rgba(93, 78, 78, 0.1);
+  --ink-medium: rgba(93, 78, 78, 0.3);
+  --ink-dark: rgba(93, 78, 78, 0.7);
+  
+  --border-color: rgba(93, 78, 78, 0.2);
+  
+  /* ========== 字体 ========== */
+  --font-display: 'ZCOOL XiaoWei', 'Noto Serif SC', '宋体', serif;
+  --font-body: 'Noto Serif SC', 'Source Han Serif CN', '宋体', serif;
+  --font-cursive: 'Ma Shan Zheng', 'ZCOOL QingKe HuangYou', cursive;
+  
+  /* ========== 圆角 ========== */
+  --radius-sm: 0;
+  --radius-md: 2px;
+  --radius-lg: 4px;
+  
+  /* ========== 阴影 ========== */
+  --shadow-ink: 2px 2px 8px rgba(93, 78, 78, 0.15);
+  --shadow-paper: 0 2px 10px rgba(0, 0, 0, 0.05);
+  
+  /* ========== 动画 ========== */
+  --transition-ink: 0.6s ease;
+  
+  /* 应用基础样式 */
+  background: var(--background);
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+  color: var(--text);
+  font-family: var(--font-body);
+  line-height: 1.8;
+}
+
+/* ========== 场景头部 ========== */
+.theme-ancient-chinese .scene-header {
+  background: linear-gradient(180deg, var(--surface) 0%, transparent 100%);
+  padding: 20px 24px;
+  text-align: center;
+  position: relative;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.theme-ancient-chinese .scene-header::before,
+.theme-ancient-chinese .scene-header::after {
+  content: '◇';
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--border-color);
+  font-size: 0.8em;
+}
+
+.theme-ancient-chinese .scene-header::before { left: 16px; }
+.theme-ancient-chinese .scene-header::after { right: 16px; }
+
+.theme-ancient-chinese .scene-header__main {
+  font-family: var(--font-display);
+  font-size: 1.1em;
+  letter-spacing: 4px;
+  color: var(--primary);
+}
+
+.theme-ancient-chinese .scene-header__divider {
+  margin: 0 12px;
+  color: var(--text-light);
+}
+
+.theme-ancient-chinese .scene-header__sub {
+  margin-top: 8px;
+  font-size: 0.9em;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* ========== 角色状态 ========== */
+.theme-ancient-chinese .character-status {
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  padding: 20px;
+  position: relative;
+  box-shadow: var(--shadow-paper);
+}
+
+/* 卷轴装饰 */
+.theme-ancient-chinese .character-status::before,
+.theme-ancient-chinese .character-status::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 8px;
+  background: linear-gradient(90deg, 
+    var(--secondary) 0%, 
+    #a08060 20%, 
+    #c0a080 50%, 
+    #a08060 80%, 
+    var(--secondary) 100%
+  );
+}
+
+.theme-ancient-chinese .character-status::before { top: -8px; border-radius: 4px 4px 0 0; }
+.theme-ancient-chinese .character-status::after { bottom: -8px; border-radius: 0 0 4px 4px; }
+
+.theme-ancient-chinese .character-status__header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px dashed var(--border-color);
+}
+
+.theme-ancient-chinese .character-status__avatar {
+  width: 64px;
+  height: 64px;
+  border: 3px double var(--secondary);
+  padding: 2px;
+  background: var(--surface-elevated);
+}
+
+.theme-ancient-chinese .character-status__name {
+  font-family: var(--font-cursive);
+  font-size: 1.5em;
+  color: var(--primary);
+  letter-spacing: 2px;
+}
+
+.theme-ancient-chinese .status-item {
+  display: flex;
+  gap: 8px;
+  padding: 8px 0;
+  animation: ink-fade-in 0.8s ease backwards;
+}
+
+.theme-ancient-chinese .status-item:nth-child(1) { animation-delay: 0.2s; }
+.theme-ancient-chinese .status-item:nth-child(2) { animation-delay: 0.4s; }
+.theme-ancient-chinese .status-item:nth-child(3) { animation-delay: 0.6s; }
+.theme-ancient-chinese .status-item:nth-child(4) { animation-delay: 0.8s; }
+
+@keyframes ink-fade-in {
+  from {
+    opacity: 0;
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+
+.theme-ancient-chinese .status-item__label {
+  color: var(--text-muted);
+  min-width: 48px;
+}
+
+.theme-ancient-chinese .character-status__thought {
+  margin-top: 16px;
+  padding: 16px;
+  background: var(--ink-light);
+  border-left: 3px solid var(--secondary);
+  font-style: italic;
+  position: relative;
+}
+
+.theme-ancient-chinese .character-status__thought::before {
+  content: '「';
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  font-size: 1.5em;
+  color: var(--text-light);
+}
+
+.theme-ancient-chinese .character-status__thought::after {
+  content: '」';
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  font-size: 1.5em;
+  color: var(--text-light);
+}
+
+/* ========== 记忆模块 ========== */
+.theme-ancient-chinese .memory-log {
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  padding: 20px;
+}
+
+.theme-ancient-chinese .memory-log__title {
+  font-family: var(--font-cursive);
+  font-size: 1.2em;
+  color: var(--primary);
+  text-align: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-color);
+  position: relative;
+}
+
+/* 印章装饰 */
+.theme-ancient-chinese .memory-log__title::after {
+  content: '忆';
+  position: absolute;
+  right: 8px;
+  top: -4px;
+  width: 32px;
+  height: 32px;
+  background: var(--accent);
+  color: white;
+  font-family: var(--font-cursive);
+  font-size: 0.8em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 2px;
+  transform: rotate(-5deg);
+}
+
+.theme-ancient-chinese .memory-entry {
+  display: flex;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px dotted var(--border-color);
+}
+
+.theme-ancient-chinese .memory-entry__index {
+  font-family: var(--font-cursive);
+  color: var(--secondary);
+  min-width: 48px;
+}
+
+.theme-ancient-chinese .memory-entry--compressed {
+  background: linear-gradient(90deg, var(--ink-light), transparent);
+  padding: 12px;
+  margin: 8px 0;
+  border-left: 2px solid var(--secondary);
+}
+
+.theme-ancient-chinese .memory-entry--critical {
+  color: var(--accent);
+}
+
+/* ========== 群聊模块 ========== */
+.theme-ancient-chinese .group-chat {
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+}
+
+.theme-ancient-chinese .group-chat__header {
+  padding: 16px;
+  background: var(--ink-light);
+  text-align: center;
+  font-family: var(--font-display);
+  letter-spacing: 2px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.theme-ancient-chinese .group-chat__messages {
+  padding: 16px;
+}
+
+.theme-ancient-chinese .group-message {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.theme-ancient-chinese .group-message__avatar {
+  width: 40px;
+  height: 40px;
+  border: 2px solid var(--border-color);
+  border-radius: 50%;
+}
+
+.theme-ancient-chinese .group-message__name {
+  font-family: var(--font-display);
+  font-size: 0.9em;
+  margin-bottom: 4px;
+  display: block;
+}
+
+.theme-ancient-chinese .group-message__text {
+  background: var(--surface-elevated);
+  padding: 10px 14px;
+  border: 1px solid var(--border-color);
+  position: relative;
+}
+
+.theme-ancient-chinese .group-message__text::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  top: 12px;
+  width: 0;
+  height: 0;
+  border: 4px solid transparent;
+  border-right-color: var(--border-color);
+}
+
+.theme-ancient-chinese .group-message--system {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.85em;
+  padding: 8px;
+  border-top: 1px dashed var(--border-color);
+  border-bottom: 1px dashed var(--border-color);
+  margin: 16px 0;
+}
+
+/* ========== 选项分支 ========== */
+.theme-ancient-chinese .choice-branch {
+  padding: 20px;
+}
+
+.theme-ancient-chinese .choice-branch__prompt {
+  font-family: var(--font-display);
+  text-align: center;
+  margin-bottom: 20px;
+  color: var(--primary);
+  letter-spacing: 2px;
+}
+
+.theme-ancient-chinese .choice-item {
+  display: block;
+  width: 100%;
+  padding: 16px 20px;
+  margin-bottom: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  color: var(--text);
+  cursor: pointer;
+  transition: all var(--transition-ink);
+  text-align: left;
+  position: relative;
+}
+
+.theme-ancient-chinese .choice-item:hover:not(:disabled) {
+  background: var(--ink-light);
+  border-color: var(--secondary);
+  transform: translateX(8px);
+}
+
+/* 悬停时印章效果 */
+.theme-ancient-chinese .choice-item:hover:not(:disabled)::after {
+  content: '选';
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%) rotate(-10deg);
+  width: 28px;
+  height: 28px;
+  background: var(--accent);
+  color: white;
+  font-family: var(--font-cursive);
+  font-size: 0.75em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 2px;
+  animation: stamp 0.3s ease;
+}
+
+@keyframes stamp {
+  from {
+    opacity: 0;
+    transform: translateY(-50%) rotate(-10deg) scale(1.5);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(-50%) rotate(-10deg) scale(1);
+  }
+}
+
+.theme-ancient-chinese .choice-item--locked {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.theme-ancient-chinese .choice-item__hint {
+  display: block;
+  font-size: 0.85em;
+  color: var(--secondary);
+  margin-top: 4px;
+  font-style: italic;
+}
+
+/* ========== 旁白模块 ========== */
+.theme-ancient-chinese .narrator {
+  padding: 32px 24px;
+  text-align: center;
+  position: relative;
+  background: linear-gradient(180deg, transparent, var(--ink-light), transparent);
+}
+
+.theme-ancient-chinese .narrator::before,
+.theme-ancient-chinese .narrator::after {
+  content: '～';
+  display: block;
+  color: var(--text-light);
+  letter-spacing: 8px;
+}
+
+.theme-ancient-chinese .narrator__content {
+  font-family: var(--font-body);
+  line-height: 2;
+  color: var(--text-muted);
+  margin: 16px 0;
+}
+
+.theme-ancient-chinese .narrator--dramatic {
+  background: linear-gradient(180deg, transparent, var(--ink-medium), transparent);
+}
+
+.theme-ancient-chinese .narrator--dramatic .narrator__content {
+  color: var(--primary);
+  font-weight: 500;
+}
+
+/* ========== 好感度模块 ========== */
+.theme-ancient-chinese .affection-bar {
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  padding: 16px;
+}
+
+.theme-ancient-chinese .affection-bar__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-family: var(--font-display);
+}
+
+.theme-ancient-chinese .affection-bar__progress {
+  height: 20px;
+  background: var(--ink-light);
+  border: 1px solid var(--border-color);
+  position: relative;
+  overflow: hidden;
+}
+
+.theme-ancient-chinese .affection-bar__fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--secondary), var(--accent));
+  transition: width 0.8s ease;
+}
+
+.theme-ancient-chinese .affection-bar__text {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.8em;
+  color: var(--text);
+}
+
+.theme-ancient-chinese .affection-bar__footer {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  font-size: 0.9em;
+}
+
+.theme-ancient-chinese .affection-bar__change.positive {
+  color: var(--accent);
+}
+
+/* ========== 公众讨论 ========== */
+.theme-ancient-chinese .public-reaction {
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  padding: 16px;
+}
+
+.theme-ancient-chinese .public-reaction__title {
+  font-family: var(--font-display);
+  text-align: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-color);
+  letter-spacing: 2px;
+}
+
+.theme-ancient-chinese .reaction-item {
+  padding: 12px;
+  margin-bottom: 12px;
+  background: var(--surface-elevated);
+  border-left: 3px solid var(--border-color);
+}
+
+.theme-ancient-chinese .reaction-item--positive {
+  border-left-color: var(--accent);
+}
+
+.theme-ancient-chinese .reaction-item__header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 0.9em;
+}
+
+.theme-ancient-chinese .reaction-item__author {
+  font-family: var(--font-display);
+  color: var(--secondary);
+}
+
+.theme-ancient-chinese .reaction-item__likes {
+  color: var(--text-muted);
+}

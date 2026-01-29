@@ -1,0 +1,514 @@
+/**
+ * 现代简约主题 - Modern Minimal Theme
+ * 黑白灰、大量留白、无衬线字体、极简边框
+ */
+
+.theme-modern-minimal {
+  /* ========== 颜色系统 ========== */
+  --primary: #000;
+  --primary-rgb: 0, 0, 0;
+  --secondary: #666;
+  --accent: #0066ff;
+  --accent-rgb: 0, 102, 255;
+  
+  --background: #fff;
+  --surface: #fafafa;
+  --surface-elevated: #fff;
+  
+  --text: #1a1a1a;
+  --text-muted: #999;
+  --text-light: #ccc;
+  
+  --success: #00c853;
+  --warning: #ffab00;
+  --error: #ff1744;
+  
+  --border-color: #e8e8e8;
+  
+  /* ========== 字体 ========== */
+  --font-display: 'DM Sans', 'Noto Sans SC', -apple-system, sans-serif;
+  --font-body: 'DM Sans', 'Noto Sans SC', -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  
+  /* ========== 圆角 ========== */
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  
+  /* ========== 阴影 ========== */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.08);
+  
+  /* ========== 间距 ========== */
+  --spacing-unit: 8px;
+  
+  /* ========== 动画 ========== */
+  --transition-fast: 0.15s;
+  --transition-normal: 0.25s;
+  --easing: cubic-bezier(0.4, 0, 0.2, 1);
+  
+  /* 应用基础样式 */
+  background: var(--background);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ========== 场景头部 ========== */
+.theme-modern-minimal .scene-header {
+  padding: 24px 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.theme-modern-minimal .scene-header__main {
+  font-size: 0.75em;
+  text-transform: uppercase;
+  letter-spacing: 3px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.theme-modern-minimal .scene-header__divider {
+  width: 24px;
+  height: 1px;
+  background: var(--border-color);
+}
+
+.theme-modern-minimal .scene-header__sub {
+  margin-top: 8px;
+  font-size: 0.85em;
+  color: var(--text-light);
+}
+
+/* ========== 角色状态 ========== */
+.theme-modern-minimal .character-status {
+  padding: 32px;
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+}
+
+.theme-modern-minimal .character-status__header {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 24px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.theme-modern-minimal .character-status__avatar {
+  width: 48px;
+  height: 48px;
+  background: var(--text);
+  object-fit: cover;
+}
+
+.theme-modern-minimal .character-status__name {
+  font-weight: 600;
+  font-size: 1.1em;
+  letter-spacing: -0.02em;
+}
+
+.theme-modern-minimal .character-status__list {
+  display: grid;
+  gap: 12px;
+}
+
+.theme-modern-minimal .status-item {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  gap: 16px;
+  font-size: 0.95em;
+}
+
+.theme-modern-minimal .status-item__icon {
+  display: none; /* 极简风格隐藏图标 */
+}
+
+.theme-modern-minimal .status-item__label {
+  color: var(--text-muted);
+  font-size: 0.85em;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.theme-modern-minimal .character-status__thought {
+  margin-top: 24px;
+  padding: 20px;
+  background: var(--background);
+  border-left: 2px solid var(--text);
+  font-style: italic;
+  color: var(--secondary);
+}
+
+.theme-modern-minimal .thought-icon {
+  display: none;
+}
+
+/* ========== 记忆模块 ========== */
+.theme-modern-minimal .memory-log {
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+}
+
+.theme-modern-minimal .memory-log__title {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  font-size: 0.75em;
+  color: var(--text-muted);
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.theme-modern-minimal .memory-entry {
+  display: flex;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 0.95em;
+}
+
+.theme-modern-minimal .memory-entry:last-child {
+  border-bottom: none;
+}
+
+.theme-modern-minimal .memory-entry__index {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  color: var(--text-muted);
+  min-width: 48px;
+}
+
+.theme-modern-minimal .memory-entry--compressed {
+  background: var(--background);
+  padding: 16px;
+  margin: 8px 0;
+}
+
+.theme-modern-minimal .memory-entry--critical {
+  border-left: 2px solid var(--accent);
+  padding-left: 16px;
+}
+
+/* ========== 群聊模块 ========== */
+.theme-modern-minimal .group-chat {
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+}
+
+.theme-modern-minimal .group-chat__header {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border-color);
+  font-weight: 500;
+}
+
+.theme-modern-minimal .group-chat__messages {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.theme-modern-minimal .group-message {
+  display: flex;
+  gap: 16px;
+}
+
+.theme-modern-minimal .group-message__avatar {
+  width: 32px;
+  height: 32px;
+  background: var(--text);
+  flex-shrink: 0;
+}
+
+.theme-modern-minimal .group-message__content {
+  flex: 1;
+}
+
+.theme-modern-minimal .group-message__name {
+  font-size: 0.8em;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 4px;
+  display: block;
+}
+
+.theme-modern-minimal .group-message__text {
+  line-height: 1.5;
+}
+
+.theme-modern-minimal .group-message--system {
+  text-align: center;
+  font-size: 0.8em;
+  color: var(--text-muted);
+  padding: 12px;
+  background: var(--background);
+}
+
+/* ========== 选项分支 ========== */
+.theme-modern-minimal .choice-branch {
+  padding: 32px;
+}
+
+.theme-modern-minimal .choice-branch__prompt {
+  font-weight: 500;
+  margin-bottom: 24px;
+}
+
+.theme-modern-minimal .choice-branch__list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.theme-modern-minimal .choice-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 20px 24px;
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  color: var(--text);
+  cursor: pointer;
+  transition: all var(--transition-fast) var(--easing);
+  text-align: left;
+}
+
+.theme-modern-minimal .choice-item:hover:not(:disabled) {
+  background: var(--background);
+  border-color: var(--text);
+}
+
+.theme-modern-minimal .choice-item--locked {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.theme-modern-minimal .choice-item__letter {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  color: var(--text-muted);
+}
+
+.theme-modern-minimal .choice-item__hint {
+  display: block;
+  font-size: 0.85em;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.theme-modern-minimal .choice-branch__timer {
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  color: var(--text-muted);
+  margin-top: 24px;
+}
+
+/* ========== 旁白模块 ========== */
+.theme-modern-minimal .narrator {
+  padding: 48px 32px;
+  text-align: center;
+}
+
+.theme-modern-minimal .narrator__content {
+  font-size: 1.1em;
+  line-height: 2;
+  color: var(--secondary);
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.theme-modern-minimal .narrator--dramatic .narrator__content {
+  font-weight: 500;
+  color: var(--text);
+}
+
+.theme-modern-minimal .narrator--whisper .narrator__content {
+  font-size: 0.95em;
+  color: var(--text-light);
+  font-style: italic;
+}
+
+/* ========== 好感度模块 ========== */
+.theme-modern-minimal .affection-bar {
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+}
+
+.theme-modern-minimal .affection-bar__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  font-weight: 500;
+}
+
+.theme-modern-minimal .affection-bar__progress {
+  height: 4px;
+  background: var(--border-color);
+  position: relative;
+  overflow: hidden;
+}
+
+.theme-modern-minimal .affection-bar__fill {
+  height: 100%;
+  background: var(--text);
+  transition: width 0.5s var(--easing);
+}
+
+.theme-modern-minimal .affection-bar__text {
+  position: absolute;
+  right: 0;
+  top: 12px;
+  font-family: var(--font-mono);
+  font-size: 0.75em;
+  color: var(--text-muted);
+}
+
+.theme-modern-minimal .affection-bar__footer {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 16px;
+  font-size: 0.85em;
+  color: var(--text-muted);
+}
+
+.theme-modern-minimal .affection-bar__change {
+  font-family: var(--font-mono);
+}
+
+.theme-modern-minimal .affection-bar__change.positive {
+  color: var(--success);
+}
+
+.theme-modern-minimal .affection-bar__change.negative {
+  color: var(--error);
+}
+
+/* ========== 公众讨论 ========== */
+.theme-modern-minimal .public-reaction {
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+}
+
+.theme-modern-minimal .public-reaction__title {
+  font-size: 0.75em;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--text-muted);
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.theme-modern-minimal .reaction-item {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.theme-modern-minimal .reaction-item:last-child {
+  border-bottom: none;
+}
+
+.theme-modern-minimal .reaction-item__header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.theme-modern-minimal .reaction-item__author {
+  font-weight: 500;
+  font-size: 0.9em;
+}
+
+.theme-modern-minimal .reaction-item__likes {
+  font-size: 0.85em;
+  color: var(--text-muted);
+}
+
+.theme-modern-minimal .reaction-item__content {
+  font-size: 0.95em;
+  line-height: 1.6;
+}
+
+/* ========== 物品弹窗 ========== */
+.theme-modern-minimal .item-popup {
+  position: fixed;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.95);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.theme-modern-minimal .item-popup__card {
+  background: var(--background);
+  border: 1px solid var(--border-color);
+  padding: 48px;
+  text-align: center;
+  max-width: 320px;
+  animation: fade-up 0.3s var(--easing);
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.theme-modern-minimal .item-popup__icon {
+  font-size: 3em;
+  margin-bottom: 24px;
+}
+
+.theme-modern-minimal .item-popup__name {
+  font-weight: 600;
+  font-size: 1.25em;
+  margin-bottom: 8px;
+}
+
+.theme-modern-minimal .item-popup__rarity {
+  font-size: 0.7em;
+  text-transform: uppercase;
+  letter-spacing: 3px;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+}
+
+.theme-modern-minimal .item-popup__description {
+  font-size: 0.95em;
+  color: var(--secondary);
+  line-height: 1.6;
+}
+
+/* ========== 响应式 ========== */
+@media (max-width: 640px) {
+  .theme-modern-minimal .character-status,
+  .theme-modern-minimal .memory-log,
+  .theme-modern-minimal .choice-branch {
+    padding: 20px;
+  }
+  
+  .theme-modern-minimal .status-item {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+}

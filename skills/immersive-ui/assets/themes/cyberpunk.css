@@ -1,0 +1,499 @@
+/**
+ * 赛博朋克主题 - Cyberpunk Theme
+ * 霓虹紫蓝、故障艺术、科技感
+ */
+
+.theme-cyberpunk {
+  /* ========== 颜色系统 ========== */
+  --primary: #00f5ff;
+  --primary-rgb: 0, 245, 255;
+  --secondary: #ff00ff;
+  --secondary-rgb: 255, 0, 255;
+  --accent: #ffff00;
+  --accent-rgb: 255, 255, 0;
+  
+  --background: #0a0a0f;
+  --surface: #1a1a2e;
+  --surface-elevated: #252545;
+  
+  --text: #e0e0e0;
+  --text-muted: #888;
+  --text-bright: #fff;
+  
+  --success: #00ff88;
+  --warning: #ffaa00;
+  --error: #ff3366;
+  
+  --border-color: rgba(0, 245, 255, 0.3);
+  
+  /* ========== 字体 ========== */
+  --font-display: 'Orbitron', 'Noto Sans SC', sans-serif;
+  --font-body: 'Rajdhani', 'Noto Sans SC', sans-serif;
+  --font-mono: 'Share Tech Mono', monospace;
+  
+  /* ========== 圆角 ========== */
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 8px;
+  
+  /* ========== 阴影 ========== */
+  --shadow-glow: 0 0 20px rgba(var(--primary-rgb), 0.3);
+  --shadow-glow-strong: 0 0 40px rgba(var(--primary-rgb), 0.5);
+  
+  /* ========== 动画 ========== */
+  --transition-fast: 0.15s;
+  --transition-normal: 0.3s;
+  
+  /* 应用基础样式 */
+  background: var(--background);
+  color: var(--text);
+  font-family: var(--font-body);
+}
+
+/* ========== 扫描线效果 ========== */
+.theme-cyberpunk::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 245, 255, 0.03) 2px,
+    rgba(0, 245, 255, 0.03) 4px
+  );
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* ========== 场景头部 ========== */
+.theme-cyberpunk .scene-header {
+  background: linear-gradient(135deg, var(--surface) 0%, transparent 100%);
+  border: 1px solid var(--border-color);
+  border-left: 3px solid var(--primary);
+  padding: 12px 16px;
+  position: relative;
+  overflow: hidden;
+}
+
+.theme-cyberpunk .scene-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, var(--primary), transparent);
+  animation: scan 2s linear infinite;
+}
+
+@keyframes scan {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(100%); }
+}
+
+.theme-cyberpunk .scene-header__main {
+  font-family: var(--font-display);
+  color: var(--primary);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  text-shadow: 0 0 10px rgba(var(--primary-rgb), 0.8);
+}
+
+.theme-cyberpunk .scene-header__sub {
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  font-size: 0.85em;
+  margin-top: 4px;
+}
+
+/* ========== 角色状态 ========== */
+.theme-cyberpunk .character-status {
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  padding: 16px;
+  position: relative;
+  clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 0 100%);
+}
+
+.theme-cyberpunk .character-status__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.theme-cyberpunk .character-status__avatar {
+  width: 56px;
+  height: 56px;
+  border: 2px solid var(--primary);
+  box-shadow: var(--shadow-glow);
+  animation: avatar-pulse 2s ease-in-out infinite;
+}
+
+@keyframes avatar-pulse {
+  0%, 100% { box-shadow: 0 0 10px rgba(var(--primary-rgb), 0.5); }
+  50% { box-shadow: 0 0 25px rgba(var(--primary-rgb), 0.8); }
+}
+
+.theme-cyberpunk .character-status__name {
+  font-family: var(--font-display);
+  font-size: 1.25em;
+  color: var(--primary);
+  text-shadow: 0 0 10px rgba(var(--primary-rgb), 0.6);
+}
+
+.theme-cyberpunk .status-item {
+  display: flex;
+  gap: 8px;
+  padding: 6px 0;
+  font-family: var(--font-body);
+  animation: slide-in 0.4s ease-out backwards;
+}
+
+.theme-cyberpunk .status-item:nth-child(1) { animation-delay: 0.1s; }
+.theme-cyberpunk .status-item:nth-child(2) { animation-delay: 0.2s; }
+.theme-cyberpunk .status-item:nth-child(3) { animation-delay: 0.3s; }
+.theme-cyberpunk .status-item:nth-child(4) { animation-delay: 0.4s; }
+
+@keyframes slide-in {
+  from { 
+    opacity: 0; 
+    transform: translateX(-20px);
+  }
+  to { 
+    opacity: 1; 
+    transform: translateX(0);
+  }
+}
+
+.theme-cyberpunk .status-item__icon {
+  color: var(--primary);
+}
+
+.theme-cyberpunk .status-item__label {
+  color: var(--text-muted);
+  min-width: 50px;
+}
+
+.theme-cyberpunk .character-status__thought {
+  margin-top: 16px;
+  padding: 12px;
+  background: rgba(var(--secondary-rgb), 0.1);
+  border-left: 2px solid var(--secondary);
+  font-style: italic;
+  color: rgba(var(--secondary-rgb), 0.9);
+}
+
+/* ========== 记忆模块 ========== */
+.theme-cyberpunk .memory-log {
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  padding: 16px;
+}
+
+.theme-cyberpunk .memory-log__title {
+  font-family: var(--font-display);
+  color: var(--primary);
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.theme-cyberpunk .memory-entry {
+  display: flex;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(var(--primary-rgb), 0.1);
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+.theme-cyberpunk .memory-entry__index {
+  color: var(--primary);
+  min-width: 60px;
+}
+
+.theme-cyberpunk .memory-entry--compressed {
+  background: rgba(var(--accent-rgb), 0.1);
+  padding: 8px;
+  margin: 4px 0;
+}
+
+.theme-cyberpunk .memory-entry--critical .memory-entry__content {
+  color: var(--accent);
+}
+
+/* ========== 群聊模块 ========== */
+.theme-cyberpunk .group-chat {
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+}
+
+.theme-cyberpunk .group-chat__header {
+  padding: 12px 16px;
+  background: var(--surface-elevated);
+  border-bottom: 1px solid var(--border-color);
+  font-family: var(--font-display);
+}
+
+.theme-cyberpunk .group-chat__messages {
+  padding: 16px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.theme-cyberpunk .group-message {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.theme-cyberpunk .group-message__avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 2px;
+  border: 1px solid var(--border-color);
+}
+
+.theme-cyberpunk .group-message__name {
+  font-size: 0.85em;
+  margin-bottom: 4px;
+  display: block;
+}
+
+.theme-cyberpunk .group-message__text {
+  background: var(--surface-elevated);
+  padding: 8px 12px;
+  border-radius: 0 var(--radius-md) var(--radius-md) var(--radius-md);
+  display: inline-block;
+}
+
+.theme-cyberpunk .group-message--system {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.8em;
+  padding: 8px;
+  background: rgba(var(--primary-rgb), 0.1);
+}
+
+/* ========== 选项分支 ========== */
+.theme-cyberpunk .choice-branch {
+  padding: 16px;
+}
+
+.theme-cyberpunk .choice-branch__prompt {
+  font-family: var(--font-display);
+  color: var(--text-bright);
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+.theme-cyberpunk .choice-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  padding: 16px;
+  margin-bottom: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  color: var(--text);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-align: left;
+}
+
+.theme-cyberpunk .choice-item:hover:not(:disabled) {
+  border-color: var(--primary);
+  box-shadow: var(--shadow-glow);
+  transform: translateX(4px);
+}
+
+.theme-cyberpunk .choice-item--locked {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.theme-cyberpunk .choice-item__letter {
+  font-family: var(--font-display);
+  color: var(--primary);
+  font-size: 1.2em;
+}
+
+.theme-cyberpunk .choice-item__hint {
+  display: block;
+  font-size: 0.85em;
+  color: var(--accent);
+  margin-top: 4px;
+}
+
+.theme-cyberpunk .choice-branch__timer {
+  text-align: center;
+  color: var(--warning);
+  font-family: var(--font-mono);
+  animation: timer-pulse 1s ease-in-out infinite;
+}
+
+@keyframes timer-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* ========== 好感度模块 ========== */
+.theme-cyberpunk .affection-bar {
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  padding: 16px;
+}
+
+.theme-cyberpunk .affection-bar__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.theme-cyberpunk .affection-bar__icon {
+  animation: heart-beat 1s ease-in-out infinite;
+}
+
+@keyframes heart-beat {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+}
+
+.theme-cyberpunk .affection-bar__progress {
+  height: 24px;
+  background: rgba(var(--primary-rgb), 0.1);
+  border: 1px solid var(--border-color);
+  position: relative;
+  overflow: hidden;
+}
+
+.theme-cyberpunk .affection-bar__fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--secondary), var(--primary));
+  transition: width 0.5s ease;
+  box-shadow: 0 0 10px rgba(var(--secondary-rgb), 0.5);
+}
+
+.theme-cyberpunk .affection-bar__text {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  text-shadow: 0 0 4px var(--background);
+}
+
+.theme-cyberpunk .affection-bar__change.positive {
+  color: var(--success);
+}
+
+.theme-cyberpunk .affection-bar__change.negative {
+  color: var(--error);
+}
+
+/* ========== 旁白模块 ========== */
+.theme-cyberpunk .narrator {
+  padding: 24px;
+  text-align: center;
+  position: relative;
+}
+
+.theme-cyberpunk .narrator::before,
+.theme-cyberpunk .narrator::after {
+  content: '';
+  position: absolute;
+  left: 10%;
+  right: 10%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--primary), transparent);
+}
+
+.theme-cyberpunk .narrator::before { top: 0; }
+.theme-cyberpunk .narrator::after { bottom: 0; }
+
+.theme-cyberpunk .narrator__content {
+  font-style: italic;
+  color: var(--text-muted);
+  line-height: 1.8;
+}
+
+.theme-cyberpunk .narrator--dramatic .narrator__content {
+  color: var(--primary);
+  text-shadow: 0 0 20px rgba(var(--primary-rgb), 0.5);
+}
+
+/* ========== 物品弹窗 ========== */
+.theme-cyberpunk .item-popup {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.theme-cyberpunk .item-popup__card {
+  background: var(--surface);
+  border: 2px solid var(--rarity-color);
+  padding: 32px;
+  text-align: center;
+  position: relative;
+  animation: item-reveal 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes item-reveal {
+  from {
+    opacity: 0;
+    transform: scale(0.5) rotateY(90deg);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) rotateY(0);
+  }
+}
+
+.theme-cyberpunk .item-popup__glow {
+  position: absolute;
+  inset: -20px;
+  background: radial-gradient(circle, var(--rarity-color), transparent 70%);
+  opacity: 0.3;
+  z-index: -1;
+  animation: glow-pulse 2s ease-in-out infinite;
+}
+
+@keyframes glow-pulse {
+  0%, 100% { opacity: 0.3; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.1); }
+}
+
+.theme-cyberpunk .item-popup__icon {
+  font-size: 4em;
+  margin-bottom: 16px;
+}
+
+.theme-cyberpunk .item-popup__name {
+  font-family: var(--font-display);
+  font-size: 1.5em;
+  color: var(--rarity-color);
+  margin-bottom: 8px;
+}
+
+.theme-cyberpunk .item-popup__rarity {
+  font-family: var(--font-mono);
+  font-size: 0.8em;
+  color: var(--rarity-color);
+  letter-spacing: 3px;
+  margin-bottom: 16px;
+}
