@@ -1,6 +1,18 @@
-import { AppSettings } from '../types/settings';
+import { AppSettings, PROVIDER_CONFIGS } from '../types/settings';
 import { CharacterCard, ThemeType } from '../types/character-card';
-import { SYSTEM_PROMPT, GENERATE_ALL_PROMPT, MODULE_PROMPTS } from '../data/ai-prompts';
+import { SYSTEM_PROMPT, SEARCH_SYSTEM_PROMPT, GENERATE_ALL_PROMPT, MODULE_PROMPTS } from '../data/ai-prompts';
+
+// 生成结果类型（包含搜索来源）
+export interface GenerationResult {
+  card: Partial<CharacterCard>;
+  searchSources?: SearchSource[];
+}
+
+// 搜索来源（导出供 UI 使用）
+export interface SearchSource {
+  uri: string;
+  title: string;
+}
 
 // 消息类型
 interface Message {
@@ -12,6 +24,7 @@ interface Message {
 interface APIResponse {
   content: string;
   error?: string;
+  searchSources?: SearchSource[];  // 搜索来源（仅 Gemini Search Grounding）
 }
 
 // 后端代理服务器地址
@@ -91,7 +104,8 @@ async function callClaude(
 // 调用 Gemini API
 async function callGemini(
   messages: Message[],
-  settings: AppSettings
+  settings: AppSettings,
+  enableSearch: boolean = false
 ): Promise<APIResponse> {
   const contents = messages
     .filter(m => m.role !== 'system')
@@ -102,22 +116,31 @@ async function callGemini(
 
   const systemInstruction = messages.find(m => m.role === 'system')?.content;
 
+  // 构建请求体
+  const requestBody: Record<string, unknown> = {
+    contents,
+    systemInstruction: systemInstruction ? { parts: [{ text: systemInstruction }] } : undefined,
+    generationConfig: {
+      temperature: 0.7,
+      responseMimeType: 'application/json',
+    },
+  };
+
+  // 如果启用搜索，添加 Google Search Grounding 工具
+  if (enableSearch) {
+    requestBody.tools = [{ googleSearch: {} }];
+    // 搜索模式下不强制 JSON 输出，因为搜索结果可能影响格式
+    (requestBody.generationConfig as Record<string, unknown>).responseMimeType = 'text/plain';
+  }
+
   const url = getProxyUrl('gemini', `/v1beta/models/${settings.model}:generateContent?key=${settings.apiKey}`);
   const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        contents,
-        systemInstruction: systemInstruction ? { parts: [{ text: systemInstruction }] } : undefined,
-        generationConfig: {
-          temperature: 0.7,
-          responseMimeType: 'application/json',
-        },
-      }),
-    }
-  );
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(requestBody),
+  });
 
   if (!response.ok) {
     const error = await response.json();
@@ -125,7 +148,23 @@ async function callGemini(
   }
 
   const data = await response.json();
-  return { content: data.candidates[0].content.parts[0].text };
+  const candidate = data.candidates[0];
+
+  // 提取搜索来源（如果有）
+  let searchSources: SearchSource[] | undefined;
+  if (candidate.groundingMetadata?.groundingChunks) {
+    searchSources = candidate.groundingMetadata.groundingChunks
+      .filter((chunk: { web?: { uri: string; title: string } }) => chunk.web)
+      .map((chunk: { web: { uri: string; title: string } }) => ({
+        uri: chunk.web.uri,
+        title: chunk.web.title,
+      }));
+  }
+
+  return {
+    content: candidate.content.parts[0].text,
+    searchSources,
+  };
 }
 
 // 调用 Deepseek API (兼容 OpenAI 格式)
@@ -189,7 +228,8 @@ async function callQwen(
 // 统一的 API 调用入口
 async function callAPI(
   messages: Message[],
-  settings: AppSettings
+  settings: AppSettings,
+  enableSearch: boolean = false
 ): Promise<APIResponse> {
   switch (settings.provider) {
     case 'openai':
@@ -197,7 +237,8 @@ async function callAPI(
     case 'claude':
       return callClaude(messages, settings);
     case 'gemini':
-      return callGemini(messages, settings);
+      // Gemini 支持搜索增强
+      return callGemini(messages, settings, enableSearch && settings.enableSearch);
     case 'deepseek':
       return callDeepseek(messages, settings);
     case 'qwen':
@@ -224,24 +265,35 @@ function parseJSONResponse(content: string): Record<string, unknown> {
   }
 }
 
-// 生成全部模块
+// 生成全部模块（支持搜索增强）
 export async function generateAllModules(
   userPrompt: string,
   settings: AppSettings,
   theme: ThemeType = 'modern',
-  onProgress?: (module: string, progress: number) => void
-): Promise<Partial<CharacterCard>> {
+  onProgress?: (module: string, progress: number) => void,
+  enableSearch: boolean = false
+): Promise<GenerationResult> {
+  // 判断是否启用搜索（仅 Gemini 支持）
+  const shouldSearch = enableSearch && settings.enableSearch && PROVIDER_CONFIGS[settings.provider].supportsSearch;
+
+  // 使用搜索增强的系统提示词
+  const systemPrompt = shouldSearch ? SEARCH_SYSTEM_PROMPT : SYSTEM_PROMPT;
+
   const messages: Message[] = [
-    { role: 'system', content: SYSTEM_PROMPT },
+    { role: 'system', content: systemPrompt },
     {
       role: 'user',
       content: `${GENERATE_ALL_PROMPT}\n\n用户描述：\n${userPrompt}\n\n选择的主题风格：${theme}`,
     },
   ];
 
-  onProgress?.('正在生成角色卡...', 10);
+  if (shouldSearch) {
+    onProgress?.('正在搜索角色资料...', 5);
+  }
 
-  const response = await callAPI(messages, settings);
+  onProgress?.('正在生成角色卡...', shouldSearch ? 20 : 10);
+
+  const response = await callAPI(messages, settings, shouldSearch);
 
   onProgress?.('正在解析结果...', 90);
 
@@ -250,15 +302,18 @@ export async function generateAllModules(
   onProgress?.('完成', 100);
 
   return {
-    theme,
-    characterInfo: data.characterInfo as CharacterCard['characterInfo'],
-    persona: data.persona as CharacterCard['persona'],
-    adversityHandling: data.adversityHandling as CharacterCard['adversityHandling'],
-    plotSetting: data.plotSetting as CharacterCard['plotSetting'],
-    outputSetting: data.outputSetting as CharacterCard['outputSetting'],
-    sampleDialogue: data.sampleDialogue as CharacterCard['sampleDialogue'],
-    miniTheater: data.miniTheater as CharacterCard['miniTheater'],
-    opening: data.opening as CharacterCard['opening'],
+    card: {
+      theme,
+      characterInfo: data.characterInfo as CharacterCard['characterInfo'],
+      persona: data.persona as CharacterCard['persona'],
+      adversityHandling: data.adversityHandling as CharacterCard['adversityHandling'],
+      plotSetting: data.plotSetting as CharacterCard['plotSetting'],
+      outputSetting: data.outputSetting as CharacterCard['outputSetting'],
+      sampleDialogue: data.sampleDialogue as CharacterCard['sampleDialogue'],
+      miniTheater: data.miniTheater as CharacterCard['miniTheater'],
+      opening: data.opening as CharacterCard['opening'],
+    },
+    searchSources: response.searchSources,
   };
 }
 

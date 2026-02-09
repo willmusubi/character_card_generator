@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { X, Wand2, Loader2, AlertCircle, Settings } from 'lucide-react';
+import { X, Wand2, Loader2, AlertCircle, Settings, Search } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Textarea } from '../ui/Textarea';
 import { Select } from '../ui/Select';
 import { useSettingsStore } from '../../store/useSettingsStore';
 import { useCharacterStore } from '../../store/useCharacterStore';
 import { ThemeType, THEME_NAMES, CharacterCard } from '../../types/character-card';
+import { PROVIDER_CONFIGS } from '../../types/settings';
 import { generateAllModules, generateBasicModules, generateRemainingModules } from '../../utils/ai-generator';
 
 interface AIGenerateModalProps {
@@ -35,6 +36,10 @@ export function AIGenerateModal({ isOpen, onClose, onComplete }: AIGenerateModal
   const [error, setError] = useState('');
   const [currentCardId, setCurrentCardId] = useState<string | null>(null);
   const [partialCard, setPartialCard] = useState<Partial<CharacterCard> | null>(null);
+  const [enableSearch, setEnableSearch] = useState(true);
+
+  // 检查当前提供商是否支持搜索
+  const supportsSearch = PROVIDER_CONFIGS[settings.provider].supportsSearch;
 
   if (!isOpen) return null;
 
@@ -68,16 +73,22 @@ export function AIGenerateModal({ isOpen, onClose, onComplete }: AIGenerateModal
     try {
       const selectedTheme = theme === 'auto' ? detectTheme(prompt) : theme as ThemeType;
 
-      const cardData = await generateAllModules(
+      const result = await generateAllModules(
         prompt,
         settings,
         selectedTheme,
-        handleProgress
+        handleProgress,
+        enableSearch && supportsSearch
       );
+
+      // 记录搜索来源（用于调试）
+      if (result.searchSources && result.searchSources.length > 0) {
+        console.log('[AI Generate] 搜索来源:', result.searchSources);
+      }
 
       // 创建新卡片并填充数据
       const newCardId = createCard();
-      updateCard(newCardId, cardData);
+      updateCard(newCardId, result.card);
 
       onComplete(newCardId);
     } catch (err) {
@@ -262,10 +273,32 @@ export function AIGenerateModal({ isOpen, onClose, onComplete }: AIGenerateModal
                 </div>
               </div>
 
+              {/* 搜索增强选项（仅 Gemini 支持） */}
+              {supportsSearch && (
+                <label className="flex items-center gap-2 mb-4 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={enableSearch}
+                    onChange={(e) => setEnableSearch(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                  <Search className="w-4 h-4 text-blue-600" />
+                  <span className="text-sm text-gray-700">
+                    搜索增强
+                    <span className="text-gray-500">（推荐用于已知 IP 角色）</span>
+                  </span>
+                </label>
+              )}
+
               <p className="text-xs text-gray-500 mb-4">
                 {mode === 'all'
                   ? '一次性生成所有 8 个模块，适合快速创建'
                   : '先生成基础信息，可编辑后再继续生成其他模块'}
+                {enableSearch && supportsSearch && (
+                  <span className="block mt-1 text-blue-600">
+                    已启用搜索：将自动搜索角色的官方资料，避免编造信息
+                  </span>
+                )}
               </p>
             </>
           )}
