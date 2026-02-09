@@ -11,12 +11,13 @@ export interface ProviderConfig {
 }
 
 // 提供商配置 (2025-2026 最新模型)
+// supportsSearch: 是否支持搜索增强（通过 Tool Calling 或原生搜索）
 export const PROVIDER_CONFIGS: Record<AIProvider, ProviderConfig> = {
   openai: {
     name: 'openai',
     label: 'OpenAI',
     defaultBaseUrl: 'https://api.openai.com/v1',
-    supportsSearch: true,
+    supportsSearch: true, // 通过 Tool Calling
     models: [
       'gpt-4.1',
       'gpt-4.1-mini',
@@ -31,7 +32,7 @@ export const PROVIDER_CONFIGS: Record<AIProvider, ProviderConfig> = {
     name: 'claude',
     label: 'Claude (Anthropic)',
     defaultBaseUrl: 'https://api.anthropic.com',
-    supportsSearch: false,
+    supportsSearch: true, // 通过 Tool Calling
     models: [
       'claude-opus-4-5-20251101',
       'claude-sonnet-4-5-20251101',
@@ -45,20 +46,21 @@ export const PROVIDER_CONFIGS: Record<AIProvider, ProviderConfig> = {
     name: 'gemini',
     label: 'Gemini (Google)',
     defaultBaseUrl: 'https://generativelanguage.googleapis.com/v1beta',
-    supportsSearch: true,
+    supportsSearch: true, // 原生 Google Search Grounding
     models: [
+      'gemini-3-pro-preview',
+      'gemini-3-flash-preview',
       'gemini-2.5-pro',
       'gemini-2.5-flash',
+      'gemini-2.5-flash-lite',
       'gemini-2.0-flash',
-      'gemini-2.0-flash-lite',
-      'gemini-1.5-pro',
     ],
   },
   deepseek: {
     name: 'deepseek',
     label: 'Deepseek',
     defaultBaseUrl: 'https://api.deepseek.com',
-    supportsSearch: false,
+    supportsSearch: true, // 通过 Tool Calling
     models: [
       'deepseek-chat',
       'deepseek-reasoner',
@@ -68,7 +70,7 @@ export const PROVIDER_CONFIGS: Record<AIProvider, ProviderConfig> = {
     name: 'qwen',
     label: 'Qwen (阿里云)',
     defaultBaseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-    supportsSearch: false,
+    supportsSearch: true, // 通过 Tool Calling
     models: [
       'qwen3-235b-a22b',
       'qwen-max',

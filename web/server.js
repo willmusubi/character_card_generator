@@ -101,6 +101,125 @@ app.use('/api/qwen', (req, res) => {
   proxyRequest(targetUrl, req, res, false);
 });
 
+// ============== 搜索 API ==============
+
+// 使用 DuckDuckGo 搜索（通过 html.duckduckgo.com）
+async function duckduckgoSearch(query, maxResults = 5) {
+  try {
+    // 使用 DuckDuckGo HTML 版本进行搜索
+    const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+
+    const response = await undiciFetch(searchUrl, {
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      },
+      dispatcher: proxyAgent, // 使用 VPN
+    });
+
+    const html = await response.text();
+
+    // 简单解析搜索结果
+    const results = [];
+    const resultRegex = /<a[^>]*class="result__a"[^>]*href="([^"]*)"[^>]*>([^<]*)<\/a>/g;
+    const snippetRegex = /<a[^>]*class="result__snippet"[^>]*>([^<]*(?:<[^>]*>[^<]*)*)<\/a>/g;
+
+    let match;
+    const urls = [];
+    const titles = [];
+    const snippets = [];
+
+    while ((match = resultRegex.exec(html)) !== null && urls.length < maxResults) {
+      urls.push(match[1]);
+      titles.push(match[2].replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>'));
+    }
+
+    while ((match = snippetRegex.exec(html)) !== null && snippets.length < maxResults) {
+      // 清理 HTML 标签
+      const snippet = match[1].replace(/<[^>]*>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+      snippets.push(snippet);
+    }
+
+    for (let i = 0; i < Math.min(urls.length, maxResults); i++) {
+      results.push({
+        title: titles[i] || '',
+        url: urls[i] || '',
+        snippet: snippets[i] || '',
+      });
+    }
+
+    return results;
+  } catch (error) {
+    console.error('[Search] DuckDuckGo error:', error.message);
+    return [];
+  }
+}
+
+// 使用百度搜索（国内备用）
+async function baiduSearch(query, maxResults = 5) {
+  try {
+    const searchUrl = `https://www.baidu.com/s?wd=${encodeURIComponent(query)}`;
+
+    const response = await undiciFetch(searchUrl, {
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      },
+      // 百度不需要 VPN
+    });
+
+    const html = await response.text();
+
+    // 简单解析百度搜索结果
+    const results = [];
+    // 百度的结果结构比较复杂，这里做简化处理
+    const titleRegex = /<h3[^>]*class="[^"]*t[^"]*"[^>]*>[\s\S]*?<a[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/g;
+
+    let match;
+    while ((match = titleRegex.exec(html)) !== null && results.length < maxResults) {
+      const title = match[2].replace(/<[^>]*>/g, '').replace(/&amp;/g, '&').trim();
+      if (title) {
+        results.push({
+          title,
+          url: match[1],
+          snippet: '',
+        });
+      }
+    }
+
+    return results;
+  } catch (error) {
+    console.error('[Search] Baidu error:', error.message);
+    return [];
+  }
+}
+
+// 搜索 API 端点
+app.post('/api/search', async (req, res) => {
+  const { query, maxResults = 5, engine = 'duckduckgo' } = req.body;
+
+  if (!query) {
+    return res.status(400).json({ error: 'Query is required' });
+  }
+
+  console.log(`[Search] Query: "${query}" (engine: ${engine})`);
+
+  let results;
+  if (engine === 'baidu') {
+    results = await baiduSearch(query, maxResults);
+  } else {
+    results = await duckduckgoSearch(query, maxResults);
+  }
+
+  console.log(`[Search] Found ${results.length} results`);
+
+  res.json({
+    query,
+    results,
+    source: engine,
+  });
+});
+
 app.listen(PORT, () => {
   console.log(`\n🚀 API Proxy Server running at http://localhost:${PORT}`);
   console.log(`📡 VPN Proxy: ${VPN_PROXY}\n`);

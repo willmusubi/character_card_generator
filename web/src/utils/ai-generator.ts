@@ -1,6 +1,13 @@
 import { AppSettings, PROVIDER_CONFIGS } from '../types/settings';
 import { CharacterCard, ThemeType } from '../types/character-card';
 import { SYSTEM_PROMPT, SEARCH_SYSTEM_PROMPT, GENERATE_ALL_PROMPT, MODULE_PROMPTS } from '../data/ai-prompts';
+import {
+  OPENAI_TOOLS,
+  CLAUDE_TOOLS,
+  SEARCH_TOOL_NAME,
+  executeSearchTool,
+  formatSearchResults,
+} from './tool-calling';
 
 // 生成结果类型（包含搜索来源）
 export interface GenerationResult {
@@ -24,7 +31,7 @@ interface Message {
 interface APIResponse {
   content: string;
   error?: string;
-  searchSources?: SearchSource[];  // 搜索来源（仅 Gemini Search Grounding）
+  searchSources?: SearchSource[];
 }
 
 // 后端代理服务器地址
@@ -32,81 +39,240 @@ const API_PROXY_SERVER = 'http://localhost:3001';
 
 // 获取代理 URL
 function getProxyUrl(provider: string, path: string): string {
-  // 使用后端代理服务器
   return `${API_PROXY_SERVER}/api/${provider}${path}`;
 }
 
-// 调用 OpenAI API
-async function callOpenAI(
+// ============== OpenAI API (支持 Tool Calling) ==============
+
+async function callOpenAIWithTools(
   messages: Message[],
-  settings: AppSettings
+  settings: AppSettings,
+  enableSearch: boolean,
+  onProgress?: (text: string, value: number) => void
 ): Promise<APIResponse> {
   const url = getProxyUrl('openai', '/v1/chat/completions');
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${settings.apiKey}`,
-    },
-    body: JSON.stringify({
-      model: settings.model,
-      messages,
-      temperature: 0.7,
-      response_format: { type: 'json_object' },
-    }),
-  });
+  const searchSources: SearchSource[] = [];
 
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error?.message || 'OpenAI API 调用失败');
+  // 转换消息格式
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let apiMessages: any[] = messages.map(m => ({
+    role: m.role,
+    content: m.content,
+  }));
+
+  const maxIterations = 5;
+  let iteration = 0;
+
+  while (iteration < maxIterations) {
+    iteration++;
+
+    const requestBody: Record<string, unknown> = {
+      model: settings.model,
+      messages: apiMessages,
+      temperature: 0.7,
+    };
+
+    // 只在启用搜索且是第一次迭代时添加工具
+    if (enableSearch && iteration === 1) {
+      requestBody.tools = OPENAI_TOOLS;
+      requestBody.tool_choice = 'auto';
+    } else {
+      // 最后一次请求要求 JSON 格式
+      requestBody.response_format = { type: 'json_object' };
+    }
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${settings.apiKey}`,
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error?.message || 'OpenAI API 调用失败');
+    }
+
+    const data = await response.json();
+    const choice = data.choices[0];
+
+    // 检查是否有工具调用
+    if (choice.finish_reason === 'tool_calls' && choice.message.tool_calls) {
+      onProgress?.('正在搜索资料...', 30);
+
+      // 添加 assistant 消息（包含工具调用）
+      apiMessages.push(choice.message);
+
+      // 处理每个工具调用
+      for (const toolCall of choice.message.tool_calls) {
+        if (toolCall.function.name === SEARCH_TOOL_NAME) {
+          const args = JSON.parse(toolCall.function.arguments);
+          console.log(`[OpenAI] 搜索: ${args.query}`);
+
+          try {
+            const searchResult = await executeSearchTool(args.query);
+            const formattedResult = formatSearchResults(searchResult.results);
+
+            // 记录搜索来源
+            searchResult.results.forEach(r => {
+              searchSources.push({ uri: r.url, title: r.title });
+            });
+
+            // 添加工具结果
+            apiMessages.push({
+              role: 'tool',
+              tool_call_id: toolCall.id,
+              content: formattedResult,
+            });
+          } catch (err) {
+            apiMessages.push({
+              role: 'tool',
+              tool_call_id: toolCall.id,
+              content: '搜索失败，请根据已有知识生成内容。',
+            });
+          }
+        }
+      }
+
+      onProgress?.('正在生成角色卡...', 50);
+      continue;
+    }
+
+    // 没有工具调用，返回最终结果
+    return {
+      content: choice.message.content,
+      searchSources: searchSources.length > 0 ? searchSources : undefined,
+    };
   }
 
-  const data = await response.json();
-  return { content: data.choices[0].message.content };
+  throw new Error('Tool calling 循环超过最大次数');
 }
 
-// 调用 Claude API
-async function callClaude(
-  messages: Message[],
-  settings: AppSettings
-): Promise<APIResponse> {
-  const systemMessage = messages.find(m => m.role === 'system')?.content || '';
-  const userMessages = messages.filter(m => m.role !== 'system');
+// ============== Claude API (支持 Tool Calling) ==============
 
+async function callClaudeWithTools(
+  messages: Message[],
+  settings: AppSettings,
+  enableSearch: boolean,
+  onProgress?: (text: string, value: number) => void
+): Promise<APIResponse> {
   const url = getProxyUrl('claude', '/v1/messages');
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': settings.apiKey,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
+  const searchSources: SearchSource[] = [];
+
+  const systemMessage = messages.find(m => m.role === 'system')?.content || '';
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let apiMessages: any[] = messages
+    .filter(m => m.role !== 'system')
+    .map(m => ({
+      role: m.role,
+      content: m.content,
+    }));
+
+  const maxIterations = 5;
+  let iteration = 0;
+
+  while (iteration < maxIterations) {
+    iteration++;
+
+    const requestBody: Record<string, unknown> = {
       model: settings.model,
       max_tokens: 8192,
       system: systemMessage,
-      messages: userMessages.map(m => ({
-        role: m.role,
-        content: m.content,
-      })),
-    }),
-  });
+      messages: apiMessages,
+    };
 
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error?.message || 'Claude API 调用失败');
+    if (enableSearch) {
+      requestBody.tools = CLAUDE_TOOLS;
+    }
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': settings.apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error?.message || 'Claude API 调用失败');
+    }
+
+    const data = await response.json();
+
+    // 检查是否有工具调用
+    if (data.stop_reason === 'tool_use') {
+      onProgress?.('正在搜索资料...', 30);
+
+      // 添加 assistant 消息
+      apiMessages.push({
+        role: 'assistant',
+        content: data.content,
+      });
+
+      // 处理工具调用
+      const toolResults: Array<{ type: 'tool_result'; tool_use_id: string; content: string }> = [];
+
+      for (const block of data.content) {
+        if (block.type === 'tool_use' && block.name === SEARCH_TOOL_NAME) {
+          console.log(`[Claude] 搜索: ${block.input.query}`);
+
+          try {
+            const searchResult = await executeSearchTool(block.input.query);
+            const formattedResult = formatSearchResults(searchResult.results);
+
+            searchResult.results.forEach(r => {
+              searchSources.push({ uri: r.url, title: r.title });
+            });
+
+            toolResults.push({
+              type: 'tool_result',
+              tool_use_id: block.id,
+              content: formattedResult,
+            });
+          } catch (err) {
+            toolResults.push({
+              type: 'tool_result',
+              tool_use_id: block.id,
+              content: '搜索失败，请根据已有知识生成内容。',
+            });
+          }
+        }
+      }
+
+      apiMessages.push({
+        role: 'user',
+        content: toolResults,
+      });
+
+      onProgress?.('正在生成角色卡...', 50);
+      continue;
+    }
+
+    // 没有工具调用，返回最终结果
+    const textBlock = data.content.find((b: { type: string }) => b.type === 'text');
+    return {
+      content: textBlock?.text || '',
+      searchSources: searchSources.length > 0 ? searchSources : undefined,
+    };
   }
 
-  const data = await response.json();
-  return { content: data.content[0].text };
+  throw new Error('Tool calling 循环超过最大次数');
 }
 
-// 调用 Gemini API
-async function callGemini(
+// ============== Gemini API (原生 Google Search) ==============
+
+async function callGeminiWithSearch(
   messages: Message[],
   settings: AppSettings,
-  enableSearch: boolean = false
+  enableSearch: boolean
 ): Promise<APIResponse> {
+  console.log(`[Gemini] 开始调用，搜索模式: ${enableSearch ? '开启' : '关闭'}`);
+
   const contents = messages
     .filter(m => m.role !== 'system')
     .map(m => ({
@@ -116,29 +282,24 @@ async function callGemini(
 
   const systemInstruction = messages.find(m => m.role === 'system')?.content;
 
-  // 构建请求体
   const requestBody: Record<string, unknown> = {
     contents,
     systemInstruction: systemInstruction ? { parts: [{ text: systemInstruction }] } : undefined,
     generationConfig: {
       temperature: 0.7,
-      responseMimeType: 'application/json',
+      responseMimeType: enableSearch ? 'text/plain' : 'application/json',
     },
   };
 
-  // 如果启用搜索，添加 Google Search Grounding 工具
   if (enableSearch) {
     requestBody.tools = [{ googleSearch: {} }];
-    // 搜索模式下不强制 JSON 输出，因为搜索结果可能影响格式
-    (requestBody.generationConfig as Record<string, unknown>).responseMimeType = 'text/plain';
+    console.log('[Gemini] 已添加 Google Search Grounding 工具');
   }
 
   const url = getProxyUrl('gemini', `/v1beta/models/${settings.model}:generateContent?key=${settings.apiKey}`);
   const response = await fetch(url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(requestBody),
   });
 
@@ -150,15 +311,27 @@ async function callGemini(
   const data = await response.json();
   const candidate = data.candidates[0];
 
-  // 提取搜索来源（如果有）
+  // 检查是否使用了搜索
   let searchSources: SearchSource[] | undefined;
-  if (candidate.groundingMetadata?.groundingChunks) {
-    searchSources = candidate.groundingMetadata.groundingChunks
-      .filter((chunk: { web?: { uri: string; title: string } }) => chunk.web)
-      .map((chunk: { web: { uri: string; title: string } }) => ({
-        uri: chunk.web.uri,
-        title: chunk.web.title,
-      }));
+  if (candidate.groundingMetadata) {
+    console.log('[Gemini] ✅ 使用了 Google Search Grounding');
+    console.log('[Gemini] groundingMetadata:', candidate.groundingMetadata);
+
+    if (candidate.groundingMetadata.groundingChunks) {
+      searchSources = candidate.groundingMetadata.groundingChunks
+        .filter((chunk: { web?: { uri: string; title: string } }) => chunk.web)
+        .map((chunk: { web: { uri: string; title: string } }) => ({
+          uri: chunk.web.uri,
+          title: chunk.web.title,
+        }));
+      console.log(`[Gemini] 搜索来源 (${searchSources.length} 条):`, searchSources);
+    }
+
+    if (candidate.groundingMetadata.searchEntryPoint?.renderedContent) {
+      console.log('[Gemini] 搜索入口:', candidate.groundingMetadata.searchEntryPoint);
+    }
+  } else {
+    console.log('[Gemini] ❌ 未使用搜索（无 groundingMetadata）');
   }
 
   return {
@@ -167,88 +340,238 @@ async function callGemini(
   };
 }
 
-// 调用 Deepseek API (兼容 OpenAI 格式)
-async function callDeepseek(
-  messages: Message[],
-  settings: AppSettings
-): Promise<APIResponse> {
-  const url = getProxyUrl('deepseek', '/chat/completions');
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${settings.apiKey}`,
-    },
-    body: JSON.stringify({
-      model: settings.model,
-      messages,
-      temperature: 0.7,
-      response_format: { type: 'json_object' },
-    }),
-  });
+// ============== Deepseek API (支持 Tool Calling，OpenAI 兼容) ==============
 
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error?.message || 'Deepseek API 调用失败');
-  }
-
-  const data = await response.json();
-  return { content: data.choices[0].message.content };
-}
-
-// 调用 Qwen API (兼容 OpenAI 格式)
-async function callQwen(
-  messages: Message[],
-  settings: AppSettings
-): Promise<APIResponse> {
-  const url = getProxyUrl('qwen', '/compatible-mode/v1/chat/completions');
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${settings.apiKey}`,
-    },
-    body: JSON.stringify({
-      model: settings.model,
-      messages,
-      temperature: 0.7,
-      response_format: { type: 'json_object' },
-    }),
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error?.message || 'Qwen API 调用失败');
-  }
-
-  const data = await response.json();
-  return { content: data.choices[0].message.content };
-}
-
-// 统一的 API 调用入口
-async function callAPI(
+async function callDeepseekWithTools(
   messages: Message[],
   settings: AppSettings,
-  enableSearch: boolean = false
+  enableSearch: boolean,
+  onProgress?: (text: string, value: number) => void
 ): Promise<APIResponse> {
+  const url = getProxyUrl('deepseek', '/chat/completions');
+  const searchSources: SearchSource[] = [];
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let apiMessages: any[] = messages.map(m => ({
+    role: m.role,
+    content: m.content,
+  }));
+
+  const maxIterations = 5;
+  let iteration = 0;
+
+  while (iteration < maxIterations) {
+    iteration++;
+
+    const requestBody: Record<string, unknown> = {
+      model: settings.model,
+      messages: apiMessages,
+      temperature: 0.7,
+    };
+
+    if (enableSearch && iteration === 1) {
+      requestBody.tools = OPENAI_TOOLS;
+      requestBody.tool_choice = 'auto';
+    } else {
+      requestBody.response_format = { type: 'json_object' };
+    }
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${settings.apiKey}`,
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error?.message || 'Deepseek API 调用失败');
+    }
+
+    const data = await response.json();
+    const choice = data.choices[0];
+
+    if (choice.finish_reason === 'tool_calls' && choice.message.tool_calls) {
+      onProgress?.('正在搜索资料...', 30);
+      apiMessages.push(choice.message);
+
+      for (const toolCall of choice.message.tool_calls) {
+        if (toolCall.function.name === SEARCH_TOOL_NAME) {
+          const args = JSON.parse(toolCall.function.arguments);
+          console.log(`[Deepseek] 搜索: ${args.query}`);
+
+          try {
+            const searchResult = await executeSearchTool(args.query);
+            const formattedResult = formatSearchResults(searchResult.results);
+
+            searchResult.results.forEach(r => {
+              searchSources.push({ uri: r.url, title: r.title });
+            });
+
+            apiMessages.push({
+              role: 'tool',
+              tool_call_id: toolCall.id,
+              content: formattedResult,
+            });
+          } catch (err) {
+            apiMessages.push({
+              role: 'tool',
+              tool_call_id: toolCall.id,
+              content: '搜索失败，请根据已有知识生成内容。',
+            });
+          }
+        }
+      }
+
+      onProgress?.('正在生成角色卡...', 50);
+      continue;
+    }
+
+    return {
+      content: choice.message.content,
+      searchSources: searchSources.length > 0 ? searchSources : undefined,
+    };
+  }
+
+  throw new Error('Tool calling 循环超过最大次数');
+}
+
+// ============== Qwen API (支持 Tool Calling，OpenAI 兼容) ==============
+
+async function callQwenWithTools(
+  messages: Message[],
+  settings: AppSettings,
+  enableSearch: boolean,
+  onProgress?: (text: string, value: number) => void
+): Promise<APIResponse> {
+  const url = getProxyUrl('qwen', '/compatible-mode/v1/chat/completions');
+  const searchSources: SearchSource[] = [];
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let apiMessages: any[] = messages.map(m => ({
+    role: m.role,
+    content: m.content,
+  }));
+
+  const maxIterations = 5;
+  let iteration = 0;
+
+  while (iteration < maxIterations) {
+    iteration++;
+
+    const requestBody: Record<string, unknown> = {
+      model: settings.model,
+      messages: apiMessages,
+      temperature: 0.7,
+    };
+
+    if (enableSearch && iteration === 1) {
+      requestBody.tools = OPENAI_TOOLS;
+      requestBody.tool_choice = 'auto';
+    } else {
+      requestBody.response_format = { type: 'json_object' };
+    }
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${settings.apiKey}`,
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error?.message || 'Qwen API 调用失败');
+    }
+
+    const data = await response.json();
+    const choice = data.choices[0];
+
+    if (choice.finish_reason === 'tool_calls' && choice.message.tool_calls) {
+      onProgress?.('正在搜索资料...', 30);
+      apiMessages.push(choice.message);
+
+      for (const toolCall of choice.message.tool_calls) {
+        if (toolCall.function.name === SEARCH_TOOL_NAME) {
+          const args = JSON.parse(toolCall.function.arguments);
+          console.log(`[Qwen] 搜索: ${args.query}`);
+
+          try {
+            const searchResult = await executeSearchTool(args.query);
+            const formattedResult = formatSearchResults(searchResult.results);
+
+            searchResult.results.forEach(r => {
+              searchSources.push({ uri: r.url, title: r.title });
+            });
+
+            apiMessages.push({
+              role: 'tool',
+              tool_call_id: toolCall.id,
+              content: formattedResult,
+            });
+          } catch (err) {
+            apiMessages.push({
+              role: 'tool',
+              tool_call_id: toolCall.id,
+              content: '搜索失败，请根据已有知识生成内容。',
+            });
+          }
+        }
+      }
+
+      onProgress?.('正在生成角色卡...', 50);
+      continue;
+    }
+
+    return {
+      content: choice.message.content,
+      searchSources: searchSources.length > 0 ? searchSources : undefined,
+    };
+  }
+
+  throw new Error('Tool calling 循环超过最大次数');
+}
+
+// ============== 统一的 API 调用入口 ==============
+
+async function callAPIWithSearch(
+  messages: Message[],
+  settings: AppSettings,
+  enableSearch: boolean,
+  onProgress?: (text: string, value: number) => void
+): Promise<APIResponse> {
+  const shouldSearch = enableSearch && settings.enableSearch && PROVIDER_CONFIGS[settings.provider].supportsSearch;
+
   switch (settings.provider) {
     case 'openai':
-      return callOpenAI(messages, settings);
+      return callOpenAIWithTools(messages, settings, shouldSearch, onProgress);
     case 'claude':
-      return callClaude(messages, settings);
+      return callClaudeWithTools(messages, settings, shouldSearch, onProgress);
     case 'gemini':
-      // Gemini 支持搜索增强
-      return callGemini(messages, settings, enableSearch && settings.enableSearch);
+      return callGeminiWithSearch(messages, settings, shouldSearch);
     case 'deepseek':
-      return callDeepseek(messages, settings);
+      return callDeepseekWithTools(messages, settings, shouldSearch, onProgress);
     case 'qwen':
-      return callQwen(messages, settings);
+      return callQwenWithTools(messages, settings, shouldSearch, onProgress);
     default:
       throw new Error(`不支持的 AI 提供商: ${settings.provider}`);
   }
 }
 
-// 解析 JSON 响应
+// 简单调用（不带搜索，用于测试连接等）
+async function callAPISimple(
+  messages: Message[],
+  settings: AppSettings
+): Promise<APIResponse> {
+  return callAPIWithSearch(messages, settings, false);
+}
+
+// ============== 解析 JSON 响应 ==============
+
 function parseJSONResponse(content: string): Record<string, unknown> {
   // 尝试提取 JSON 块
   const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
@@ -265,6 +588,8 @@ function parseJSONResponse(content: string): Record<string, unknown> {
   }
 }
 
+// ============== 导出的生成函数 ==============
+
 // 生成全部模块（支持搜索增强）
 export async function generateAllModules(
   userPrompt: string,
@@ -273,10 +598,8 @@ export async function generateAllModules(
   onProgress?: (module: string, progress: number) => void,
   enableSearch: boolean = false
 ): Promise<GenerationResult> {
-  // 判断是否启用搜索（仅 Gemini 支持）
   const shouldSearch = enableSearch && settings.enableSearch && PROVIDER_CONFIGS[settings.provider].supportsSearch;
 
-  // 使用搜索增强的系统提示词
   const systemPrompt = shouldSearch ? SEARCH_SYSTEM_PROMPT : SYSTEM_PROMPT;
 
   const messages: Message[] = [
@@ -293,7 +616,7 @@ export async function generateAllModules(
 
   onProgress?.('正在生成角色卡...', shouldSearch ? 20 : 10);
 
-  const response = await callAPI(messages, settings, shouldSearch);
+  const response = await callAPIWithSearch(messages, settings, enableSearch, onProgress);
 
   onProgress?.('正在解析结果...', 90);
 
@@ -344,7 +667,7 @@ ${userPrompt}
     },
   ];
 
-  const response = await callAPI(messages, settings);
+  const response = await callAPISimple(messages, settings);
   const data = parseJSONResponse(response.content);
 
   return {
@@ -389,7 +712,7 @@ ${modulePrompts}
     },
   ];
 
-  const response = await callAPI(messages, settings);
+  const response = await callAPISimple(messages, settings);
   const data = parseJSONResponse(response.content);
 
   return data as Partial<CharacterCard>;
@@ -402,7 +725,7 @@ export async function testConnection(settings: AppSettings): Promise<boolean> {
       { role: 'user', content: '请回复 "ok"' },
     ];
 
-    const response = await callAPI(messages, settings);
+    const response = await callAPISimple(messages, settings);
     return response.content.toLowerCase().includes('ok');
   } catch {
     return false;
