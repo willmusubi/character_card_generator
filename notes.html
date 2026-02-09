@@ -1,0 +1,287 @@
+<iframe
+  loading="lazy"
+  sandbox="allow-scripts allow-same-origin"
+  srcdoc='
+&lt;style&gt;
+html, body {
+  height: fit-content;
+  margin: 0;
+  padding: 0;
+}
+html {
+  overflow: hidden;
+}
+/* 确保summary标签在没有自定义颜色时使用白色字体 */
+summary {
+  color: white;
+}
+&lt;/style&gt;
+      &lt;style&gt;
+/* --- 全局字体与颜色设定 --- */
+:root {
+    --notebook-bg: #f3f7fa; /* 柔和背景 */
+    --notebook-border: #5a7d9a; /* 边框 */
+    --notebook-header-bg: #a9c4dc; /* 标题背景 */
+    --notebook-text-color: #000000; /* 主要文本颜色 - 黑色 */
+    --header-text-color: #2c3e50; /* 标题文本颜色 */
+    --chat-bg: #e5ddd5; /* 经典聊天背景 */
+    --chat-bubble-self-bg: #95ec69; /* 自己发送的气泡颜色 */
+    --chat-bubble-other-bg: #ffffff; /* 他人发送的气泡颜色 */
+    --memory-index-color: #4a6fa5; /* 记忆模块索引颜色 */
+    --chat-name-color: #555555; /* 聊天名称颜色 */
+}
+
+/* --- 笔记本主容器 --- */
+.notebook-container {
+    font-family: &apos;Helvetica Neue&apos;, &apos;Hiragino Sans GB&apos;, &apos;Microsoft YaHei&apos;, sans-serif;
+    border: 2px solid var(--notebook-border);
+    border-radius: 8px;
+    background-color: var(--notebook-bg);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    color: var(--notebook-text-color) !important; /* 最高优先级：全局文本黑色 */
+    margin: 15px 0;
+    overflow: hidden;
+    font-size: 16px;
+    line-height: 1.7;
+}
+
+/* --- 折叠栏 &lt;details&gt; 标签美化 --- */
+.notebook-container details {
+    border-bottom: 1px dashed var(--notebook-header-bg);
+    transition: background-color 0.3s ease;
+}
+
+.notebook-container details:last-child {
+    border-bottom: none;
+}
+
+.notebook-container details[open] {
+    background-color: #ffffff;
+}
+
+/* --- 折叠栏标题 &lt;summary&gt; 标签美化 --- */
+.notebook-container summary {
+    padding: 14px 22px;
+    font-weight: 600;
+    background-color: var(--notebook-header-bg);
+    cursor: pointer;
+    outline: none;
+    list-style: none;
+    position: relative;
+    transition: background-color 0.2s;
+    font-size: 1.1em;
+    color: var(--header-text-color) !important; /* 最高优先级：标题文本颜色 */
+}
+
+.notebook-container summary:hover {
+    background-color: #bcd4e8;
+}
+
+.notebook-container summary::-webkit-details-marker {
+    display: none;
+}
+
+.notebook-container summary::before {
+    content: &apos;▶&apos;;
+    font-size: 0.8em;
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%) rotate(0deg);
+    transition: transform 0.2s ease-in-out;
+}
+
+.notebook-container details[open] &gt; summary::before {
+    transform: translateY(-50%) rotate(90deg);
+}
+
+/* --- 折叠栏内容区域及所有子元素 --- */
+.details-content, .details-content p, .details-content strong {
+    color: var(--notebook-text-color) !important; /* 最高优先级：确保内容区域所有文本黑色 */
+}
+
+.details-content {
+    padding: 18px 25px;
+}
+
+/* --- 模块二：群聊模块专属样式 --- */
+.chat-window {
+    background-color: var(--chat-bg);
+    border-radius: 6px;
+    padding: 15px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.chat-message {
+    display: flex;
+    margin-bottom: 12px;
+    max-width: 85%;
+}
+
+.chat-avatar {
+    width: 42px;
+    height: 42px;
+    border-radius: 6px;
+    margin-right: 12px;
+    flex-shrink: 0;
+}
+
+.chat-content {
+    display: flex;
+    flex-direction: column;
+}
+
+.chat-name {
+    font-size: 0.85rem;
+    color: var(--chat-name-color) !important; /* 最高优先级：聊天名称颜色 */
+    margin-bottom: 5px;
+}
+
+.chat-bubble {
+    padding: 10px 14px;
+    border-radius: 8px;
+    background-color: var(--chat-bubble-other-bg);
+    word-break: break-word;
+    position: relative;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    color: var(--notebook-text-color) !important; /* 最高优先级：聊天气泡内文字黑色 */
+}
+
+.chat-bubble::before {
+    content: &apos;&apos;;
+    position: absolute;
+    top: 10px;
+    border: 7px solid transparent;
+}
+
+.chat-message.self {
+    flex-direction: row-reverse;
+    margin-left: auto;
+}
+
+.chat-message.self .chat-avatar {
+    margin-right: 0;
+    margin-left: 12px;
+}
+
+.chat-message.self .chat-name {
+    text-align: right;
+}
+
+.chat-message.self .chat-bubble {
+    background-color: var(--chat-bubble-self-bg);
+}
+
+.chat-message.other .chat-bubble::before {
+    left: -14px;
+    border-right-color: var(--chat-bubble-other-bg);
+}
+
+.chat-message.self .chat-bubble::before {
+    right: -14px;
+    border-left-color: var(--chat-bubble-self-bg);
+}
+
+/* --- 模块三：记忆模块专属样式 --- */
+.memory-list {
+    list-style-type: none;
+    padding-left: 0;
+}
+
+.memory-item {
+    display: flex;
+    align-items: flex-start;
+    padding: 10px 0;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.memory-item:last-child {
+    border-bottom: none;
+}
+
+.memory-index {
+    font-family: Georgia, &apos;Times New Roman&apos;, serif;
+    font-size: 1.8em;
+    font-weight: bold;
+    color: var(--memory-index-color);
+    margin-right: 20px;
+    line-height: 1.1;
+    min-width: 30px;
+    text-align: right;
+}
+
+.memory-text {
+    flex-grow: 1;
+    padding-top: 4px;
+    color: var(--notebook-text-color) !important; /* 最高优先级：确保记忆文本为黑色 */
+}
+
+&lt;/style&gt;
+&lt;div class="notebook-container"&gt;
+    &lt;details&gt;
+        &lt;summary&gt;状态栏&lt;/summary&gt;
+        &lt;div class="details-content"&gt;
+          &lt;p&gt;&lt;strong&gt;衣着：&lt;/strong&gt;在此处填写衣着描述。&lt;/p&gt;
+          &lt;p&gt;&lt;strong&gt;动作：&lt;/strong&gt;在此处填写当前动作。&lt;/p&gt;
+          &lt;p&gt;&lt;strong&gt;OS：&lt;/strong&gt;在此处填写内心想法。&lt;/p&gt;
+        &lt;/div&gt;
+    &lt;/details&gt;
+    &lt;details&gt;
+        &lt;summary&gt;群聊模块&lt;/summary&gt;
+        &lt;div class="details-content"&gt;
+          &lt;div class="chat-window"&gt;
+          &lt;div class="chat-message other"&gt;
+          &lt;img src="https://via.placeholder.com/42" alt="avatar" class="chat-avatar"&gt;
+          &lt;div class="chat-content"&gt;
+          &lt;span class="chat-name"&gt;角色A&lt;/span&gt;
+          &lt;div class="chat-bubble"&gt;这里是角色A的发言内容。&lt;/div&gt;
+          &lt;/div&gt;
+          &lt;/div&gt;
+          &lt;div class="chat-message self"&gt;
+          &lt;img src="https://via.placeholder.com/42" alt="avatar" class="chat-avatar"&gt;
+          &lt;div class="chat-content"&gt;
+          &lt;span class="chat-name"&gt;角色B&lt;/span&gt;
+          &lt;div class="chat-bubble"&gt;这里是角色B的发言内容。&lt;/div&gt;
+          &lt;/div&gt;
+          &lt;/div&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
+    &lt;/details&gt;
+    &lt;details&gt;
+        &lt;summary&gt;记忆模块&lt;/summary&gt;
+        &lt;div class="details-content"&gt;
+          &lt;ol class="memory-list"&gt;
+          &lt;li class="memory-item"&gt;
+          &lt;span class="memory-index"&gt;01&lt;/span&gt;
+          &lt;p class="memory-text"&gt;在此处填写第一条记忆内容。&lt;/p&gt;
+          &lt;/li&gt;
+          &lt;li class="memory-item"&gt;
+          &lt;span class="memory-index"&gt;02&lt;/span&gt;
+          &lt;p class="memory-text"&gt;在此处填写第二条记忆内容。&lt;/p&gt;
+          &lt;/li&gt;
+          &lt;li class="memory-item"&gt;
+          &lt;span class="memory-index"&gt;...&lt;/span&gt;
+          &lt;p class="memory-text"&gt;...&lt;/p&gt;
+          &lt;/li&gt;
+          &lt;li class="memory-item"&gt;
+          &lt;span class="memory-index"&gt;11&lt;/span&gt;
+          &lt;p class="memory-text"&gt;在此处填写第十一条记忆内容。&lt;/p&gt;
+          &lt;/li&gt;
+          &lt;/ol&gt;
+        &lt;/div&gt;
+    &lt;/details&gt;
+&lt;/div&gt;
+'
+  title="Preview"
+  width="100%"
+  style="
+    border: none;
+    border-radius: 12px;
+    overflow: scroll;
+    height: 1062px;
+    min-height: 100px;
+  "
+></iframe>
+
+## 群聊说明：你可以自行增减div内容与主线相关但是不完一致的生活化的幽默的聊天记录，每次聊天记录不少于6条。
