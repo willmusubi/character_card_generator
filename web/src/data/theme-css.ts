@@ -218,5 +218,27 @@ export const THEME_CSS: Record<ThemeType, string> = {
   color: #ff9a9e;
   font-weight: 600;
   margin-bottom: 8px;
+}`,
+
+  custom: `/* ═══ AI 智能生成主题 ═══ */
+/* 自定义主题的样式由 AI 动态生成，嵌入在模板的 inline style 中 */
+
+.scene-card {
+  padding: 20px;
+  margin: 16px 0;
+  font-family: sans-serif;
+}
+
+.scene-title {
+  margin-bottom: 16px;
+}
+
+.scene-desc {
+  line-height: 1.8;
+}
+
+.dialogue {
+  padding: 12px;
+  margin: 12px 0;
 }`
 };

@@ -19,7 +19,8 @@ export const SCENE_INFO_TEMPLATES: Record<ThemeType, string> = {
   <span style="color:#ff9a9e;font-size:0.9em;margin:0 8px;">🕐 [时间]</span>
   <span style="color:#ff9a9e;font-size:0.9em;margin:0 8px;">📍 [地点]</span>
   <span style="color:#fecfef;font-size:0.9em;margin:0 8px;">✨ [氛围]</span>
-</div>`
+</div>`,
+  custom: '' // AI 动态生成，使用 CharacterCard.customTemplates.sceneInfo
 };
 
 // 正文内容模块模板
@@ -30,12 +31,13 @@ export const MAIN_CONTENT_TEMPLATES: Record<ThemeType, string> = {
   cyberpunk: `<div style="background:rgba(26,26,46,0.8);border-left:3px solid #00f5ff;padding:16px 20px;margin:12px 0;color:#e0e0e0;line-height:1.8;font-family:monospace;">
 [正文内容]
 </div>`,
-  modern: `<div style="padding:16px 0;margin:12px 0;color:#1a1a1a;line-height:1.8;font-family:sans-serif;">
+  modern: `<div style="background:#fcfcfc;border-left:2px solid #e0e0e0;padding:16px 20px;margin:12px 0;color:#1a1a1a;line-height:1.8;font-family:sans-serif;">
 [正文内容]
 </div>`,
-  cozy: `<div style="background:#fff;border-radius:16px;padding:16px 20px;margin:12px 0;color:#5d4e4e;line-height:1.9;font-family:sans-serif;box-shadow:0 2px 8px rgba(255,154,158,0.1);">
+  cozy: `<div style="background:#fff;border:2px solid #fef0f0;border-radius:16px;padding:16px 20px;margin:12px 0;color:#5d4e4e;line-height:1.9;font-family:sans-serif;box-shadow:0 2px 8px rgba(255,154,158,0.1);">
 [正文内容]
-</div>`
+</div>`,
+  custom: '' // AI 动态生成
 };
 
 // 角色状态栏模块模板
@@ -69,7 +71,8 @@ export const STATUS_BAR_TEMPLATES: Record<ThemeType, string> = {
   <div style="display:flex;padding:6px 12px;font-size:0.9em;"><span style="color:#ff9a9e;min-width:60px;">✨ 动作</span><span style="color:#5d4e4e;">[动作描述]</span></div>
   <div style="display:flex;padding:6px 12px;font-size:0.9em;"><span style="color:#ff9a9e;min-width:60px;">😊 神态</span><span style="color:#5d4e4e;">[神态描述]</span></div>
   <div style="background:#fff5f5;border-radius:12px;padding:10px 12px;margin-top:8px;font-size:0.9em;"><span style="color:#ff9a9e;">💭</span><span style="color:#ff9a9e;font-style:italic;margin-left:8px;">（[内心独白]）</span></div>
-</div>`
+</div>`,
+  custom: '' // AI 动态生成
 };
 
 // 小剧场场景卡片模板
@@ -93,5 +96,6 @@ export const SCENE_CARD_TEMPLATES: Record<ThemeType, string> = {
   <div style="font-size:0.9em;color:#ff9a9e;text-align:center;margin-bottom:12px;padding-bottom:8px;border-bottom:2px dashed #fecfef;">[场景图标] [场景标题]</div>
   <div style="color:#5d4e4e;line-height:1.8;text-align:center;">"[对话内容]"</div>
   <div style="color:#ff9a9e;font-style:italic;font-size:0.9em;text-align:center;margin-top:8px;">*[动作描写]*</div>
-</div>`
+</div>`,
+  custom: '' // AI 动态生成
 };

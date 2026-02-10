@@ -7,7 +7,7 @@ import { useSettingsStore } from '../../store/useSettingsStore';
 import { useCharacterStore } from '../../store/useCharacterStore';
 import { ThemeType, THEME_NAMES, CharacterCard } from '../../types/character-card';
 import { PROVIDER_CONFIGS } from '../../types/settings';
-import { generateAllModules, generateBasicModules, generateRemainingModules } from '../../utils/ai-generator';
+import { generateAllModules, generateBasicModules, generateRemainingModules, generateCustomStyle } from '../../utils/ai-generator';
 
 interface AIGenerateModalProps {
   isOpen: boolean;
@@ -49,7 +49,7 @@ export function AIGenerateModal({ isOpen, onClose, onComplete }: AIGenerateModal
   };
 
   const detectTheme = (text: string): ThemeType => {
-    const keywords: Record<ThemeType, string[]> = {
+    const keywords: Record<Exclude<ThemeType, 'custom'>, string[]> = {
       ancient: ['古', '仙', '侠', '三国', '宫廷', '武侠', '历史', '朝', '君', '皇'],
       cyberpunk: ['科幻', '未来', 'AI', '机械', '赛博', '太空', '机器人', '虚拟'],
       modern: ['现代', '都市', '职场', '校园', '日常', '公司', '大学'],
@@ -71,7 +71,11 @@ export function AIGenerateModal({ isOpen, onClose, onComplete }: AIGenerateModal
     setError('');
 
     try {
-      const selectedTheme = theme === 'auto' ? detectTheme(prompt) : theme as ThemeType;
+      // 确定主题
+      const isCustomTheme = theme === 'custom';
+      const selectedTheme: ThemeType = isCustomTheme
+        ? 'custom'
+        : (theme === 'auto' ? detectTheme(prompt) : theme as ThemeType);
 
       const result = await generateAllModules(
         prompt,
@@ -86,9 +90,28 @@ export function AIGenerateModal({ isOpen, onClose, onComplete }: AIGenerateModal
         console.log('[AI Generate] 搜索来源:', result.searchSources);
       }
 
+      // 如果是自定义主题，生成独特的风格模板
+      let customTemplates;
+      if (isCustomTheme && result.card.characterInfo) {
+        handleProgress('正在生成专属风格...', 85);
+        customTemplates = await generateCustomStyle(
+          {
+            name: result.card.characterInfo.name || '角色',
+            positioning: result.card.characterInfo.positioning || '',
+            worldBackground: result.card.plotSetting?.worldBackground,
+            personality: result.card.persona?.personalities,
+          },
+          settings
+        );
+        console.log('[AI Generate] 生成的自定义风格:', customTemplates.styleName);
+      }
+
       // 创建新卡片并填充数据
       const newCardId = createCard();
-      updateCard(newCardId, result.card);
+      updateCard(newCardId, {
+        ...result.card,
+        customTemplates,
+      });
 
       onComplete(newCardId);
     } catch (err) {

@@ -1,5 +1,5 @@
 import { AppSettings, PROVIDER_CONFIGS } from '../types/settings';
-import { CharacterCard, ThemeType } from '../types/character-card';
+import { CharacterCard, ThemeType, CustomTemplates } from '../types/character-card';
 import { SYSTEM_PROMPT, SEARCH_SYSTEM_PROMPT, GENERATE_ALL_PROMPT, MODULE_PROMPTS } from '../data/ai-prompts';
 import {
   OPENAI_TOOLS,
@@ -318,13 +318,14 @@ async function callGeminiWithSearch(
     console.log('[Gemini] groundingMetadata:', candidate.groundingMetadata);
 
     if (candidate.groundingMetadata.groundingChunks) {
-      searchSources = candidate.groundingMetadata.groundingChunks
+      const sources = candidate.groundingMetadata.groundingChunks
         .filter((chunk: { web?: { uri: string; title: string } }) => chunk.web)
         .map((chunk: { web: { uri: string; title: string } }) => ({
           uri: chunk.web.uri,
           title: chunk.web.title,
         }));
-      console.log(`[Gemini] 搜索来源 (${searchSources.length} 条):`, searchSources);
+      searchSources = sources;
+      console.log(`[Gemini] 搜索来源 (${sources.length} 条):`, sources);
     }
 
     if (candidate.groundingMetadata.searchEntryPoint?.renderedContent) {
@@ -716,6 +717,132 @@ ${modulePrompts}
   const data = parseJSONResponse(response.content);
 
   return data as Partial<CharacterCard>;
+}
+
+// AI 生成自定义风格模板 - 遵循 immersive-ui Skill 规范
+const STYLE_GENERATION_PROMPT = `你是一个专业的沉浸式对话 UI 设计师，需要根据角色特点生成符合 immersive-dialogue-ui 规范的完整样式系统。
+
+## 设计规范
+
+### 必须使用的 CSS 类名
+- \`.scene-card\` - 场景卡片容器
+- \`.scene-title\` - 场景标题
+- \`.scene-info\` - 场景信息行（时间、地点、氛围）
+- \`.scene-desc\` - 场景描述
+- \`.dialogue\` - 对话容器
+- \`.dialogue .speaker\` - 说话者名称
+- \`.divider\` - 分隔线
+
+### 配色方案参考（6种预设主题特征）
+1. **cyberpunk 赛博朋克**: 霓虹青#00f5ff + 洋红#ff00ff, 深空背景#0a0a0f, 发光边框, 故障动画
+2. **ancient-chinese 古风水墨**: 赭石#8b7355 + 墨绿#2f4f4f, 宣纸米#f5f5dc, 水墨渐变, 印章装饰
+3. **modern-minimal 现代简约**: 纯黑#1a1a1a, 纯白#ffffff, 大留白, 无衬线字体
+4. **cozy-warm 温馨暖调**: 珊瑚橙#ff9966, 奶油白#fff8f0, 圆角, 柔和阴影
+5. **dark-gothic 暗黑哥特**: 暗红#8b0000, 深黑#0d0d0d, 金色点缀, 哥特字体
+6. **pastel-cute 粉彩可爱**: 粉红#ffb3ba, 天蓝#bae1ff, 超圆角, 可爱装饰
+
+### 设计要求
+1. 根据角色气质创造**独特的新风格**，不要直接复制预设主题
+2. 配色要有主色、辅色、强调色、背景色、文字色
+3. 正文模板和状态栏模板必须保持视觉一致性（使用相近的背景色、边框风格）
+4. 可使用渐变、阴影、圆角、动画等 CSS 效果
+5. 可使用 emoji 或 Unicode 符号（如 ◈ ◆ ✿ ♡）增强视觉效果
+6. 使用内联 style 属性（因为会嵌入到 Mufy 平台）
+
+## 输出格式
+
+请返回 JSON 格式：
+\`\`\`json
+{
+  "styleName": "风格名称（2-4个字，如：暗夜玫瑰、冰雪童话、星海迷雾）",
+  "styleDescription": "简短描述这个风格的特点（10-20字）",
+  "colorScheme": {
+    "primary": "#主色调",
+    "secondary": "#辅助色",
+    "background": "#背景色",
+    "text": "#文字色",
+    "accent": "#强调色"
+  },
+  "themeCSS": "完整的CSS代码，使用 .scene-card .scene-title 等类名",
+  "sceneInfo": "<div style='...'>包含 [时间] [地点] [氛围] 占位符的内联样式 HTML</div>",
+  "mainContent": "<div style='...'>包含 [正文内容] 占位符的内联样式 HTML</div>",
+  "statusBar": "<div style='...'>包含 [角色名] [衣着描述] [动作描述] [神态描述] [内心独白] 占位符的内联样式 HTML</div>",
+  "sceneCard": "<div style='...'>包含 [场景标题] [对话内容] [动作描写] 占位符的内联样式 HTML</div>"
+}
+\`\`\`
+
+### themeCSS 示例结构
+themeCSS 应包含完整的 CSS 样式块，例如：
+\`\`\`css
+/* ═══ [风格名称]主题 ═══ */
+.scene-card {
+  background: linear-gradient(...);
+  border: 1px solid #xxx;
+  padding: 20px;
+  margin: 16px 0;
+  font-family: 'xxx', sans-serif;
+  color: #xxx;
+}
+.scene-title { ... }
+.scene-info { ... }
+.scene-desc { ... }
+.dialogue { ... }
+.dialogue .speaker { ... }
+\`\`\``;
+
+export async function generateCustomStyle(
+  characterInfo: {
+    name: string;
+    positioning: string;
+    worldBackground?: string;
+    personality?: string;
+  },
+  settings: AppSettings
+): Promise<CustomTemplates> {
+  console.log('[AI Style] 开始生成自定义风格...');
+  console.log('[AI Style] 角色信息:', characterInfo);
+
+  const messages: Message[] = [
+    { role: 'system', content: STYLE_GENERATION_PROMPT },
+    {
+      role: 'user',
+      content: `请为以下角色设计独特的视觉风格：
+
+角色名称：${characterInfo.name}
+角色定位：${characterInfo.positioning}
+${characterInfo.worldBackground ? `世界观背景：${characterInfo.worldBackground}` : ''}
+${characterInfo.personality ? `性格特点：${characterInfo.personality}` : ''}
+
+请根据角色的气质和世界观，创造一个独特的视觉风格（不要直接使用预设的6种主题，要创新）。
+输出完整的 JSON 格式，包含 themeCSS、colorScheme 和 4 个 HTML 模板。`,
+    },
+  ];
+
+  const response = await callAPISimple(messages, settings);
+  const data = parseJSONResponse(response.content);
+
+  console.log('[AI Style] 生成的风格:', data.styleName);
+  console.log('[AI Style] 配色方案:', data.colorScheme);
+
+  // 默认配色方案
+  const defaultColorScheme = {
+    primary: '#666666',
+    secondary: '#999999',
+    background: '#ffffff',
+    text: '#333333',
+    accent: '#007aff',
+  };
+
+  return {
+    styleName: (data.styleName as string) || '自定义风格',
+    styleDescription: (data.styleDescription as string) || '',
+    themeCSS: (data.themeCSS as string) || '',
+    sceneInfo: (data.sceneInfo as string) || '',
+    mainContent: (data.mainContent as string) || '',
+    statusBar: (data.statusBar as string) || '',
+    sceneCard: (data.sceneCard as string) || '',
+    colorScheme: (data.colorScheme as CustomTemplates['colorScheme']) || defaultColorScheme,
+  };
 }
 
 // 测试 API 连接

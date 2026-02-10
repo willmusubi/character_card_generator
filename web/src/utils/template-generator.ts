@@ -2,6 +2,42 @@ import { CharacterCard } from '../types/character-card';
 import { SCENE_INFO_TEMPLATES, MAIN_CONTENT_TEMPLATES, STATUS_BAR_TEMPLATES, SCENE_CARD_TEMPLATES } from '../data/html-templates';
 import { THEME_CSS } from '../data/theme-css';
 
+// 获取模板（支持自定义主题）
+function getSceneInfoTemplate(card: CharacterCard): string {
+  if (card.theme === 'custom' && card.customTemplates?.sceneInfo) {
+    return card.customTemplates.sceneInfo;
+  }
+  return SCENE_INFO_TEMPLATES[card.theme] || SCENE_INFO_TEMPLATES.modern;
+}
+
+function getMainContentTemplate(card: CharacterCard): string {
+  if (card.theme === 'custom' && card.customTemplates?.mainContent) {
+    return card.customTemplates.mainContent;
+  }
+  return MAIN_CONTENT_TEMPLATES[card.theme] || MAIN_CONTENT_TEMPLATES.modern;
+}
+
+function getStatusBarTemplate(card: CharacterCard): string {
+  if (card.theme === 'custom' && card.customTemplates?.statusBar) {
+    return card.customTemplates.statusBar;
+  }
+  return STATUS_BAR_TEMPLATES[card.theme] || STATUS_BAR_TEMPLATES.modern;
+}
+
+function getSceneCardTemplate(card: CharacterCard): string {
+  if (card.theme === 'custom' && card.customTemplates?.sceneCard) {
+    return card.customTemplates.sceneCard;
+  }
+  return SCENE_CARD_TEMPLATES[card.theme] || SCENE_CARD_TEMPLATES.modern;
+}
+
+function getThemeCSS(card: CharacterCard): string {
+  if (card.theme === 'custom' && card.customTemplates?.themeCSS) {
+    return card.customTemplates.themeCSS;
+  }
+  return THEME_CSS[card.theme] || THEME_CSS.modern;
+}
+
 // 生成角色信息模块输出
 export function generateCharacterInfoOutput(card: CharacterCard): string {
   const { characterInfo } = card;
@@ -102,7 +138,11 @@ ${plotSetting.currentPhase || '[描述角色目前所处的关系/剧情阶段]'
 // 生成输出设定模块输出
 export function generateOutputSettingOutput(card: CharacterCard): string {
   const { outputSetting } = card;
-  const theme = card.theme;
+
+  // 获取自定义风格信息（如果有）
+  const styleInfo = card.theme === 'custom' && card.customTemplates
+    ? `\n\n> 本角色使用 AI 智能生成的「${card.customTemplates.styleName}」风格\n> ${card.customTemplates.styleDescription}`
+    : '';
 
   return `### 回复结构
 
@@ -116,18 +156,18 @@ export function generateOutputSettingOutput(card: CharacterCard): string {
 - 回复长度：${outputSetting.replyLength || '200-400字'}
 - 语言风格：${outputSetting.languageStyle || '[风格描述]'}
 - 人称视角：${outputSetting.perspective || '第一人称'}
-- 动作描写：${outputSetting.actionFormat || '使用 *动作* 格式'}
+- 动作描写：${outputSetting.actionFormat || '使用 *动作* 格式'}${styleInfo}
 
 ### 输出模块模板
 
 **场景信息**（场景变化时显示）：
-${SCENE_INFO_TEMPLATES[theme]}
+${getSceneInfoTemplate(card)}
 
 **正文内容**：
-${MAIN_CONTENT_TEMPLATES[theme]}
+${getMainContentTemplate(card)}
 
 **角色状态栏**（每次回复最后必须输出）：
-${STATUS_BAR_TEMPLATES[theme]}
+${getStatusBarTemplate(card)}
 
 ### 模块填写规则
 
@@ -164,9 +204,8 @@ ${sampleDialogue.styleNotes || '- 句式特点：[描述]\n- 口癖/特色用语
 // 生成小剧场模块输出
 export function generateMiniTheaterOutput(card: CharacterCard): string {
   const { miniTheater } = card;
-  const theme = card.theme;
 
-  const sceneTemplate = SCENE_CARD_TEMPLATES[theme];
+  const sceneTemplate = getSceneCardTemplate(card);
 
   const scenes = [
     { title: miniTheater.scene1Title, dialogue: miniTheater.scene1Dialogue, action: miniTheater.scene1Action },
@@ -183,32 +222,31 @@ export function generateMiniTheaterOutput(card: CharacterCard): string {
   }).join('\n\n');
 
   return `<style>
-${THEME_CSS[theme]}
+${getThemeCSS(card)}
 </style>
 
 <!-- 小剧场场景 -->
-${sceneCards || SCENE_CARD_TEMPLATES[theme]}`;
+${sceneCards || getSceneCardTemplate(card)}`;
 }
 
 // 生成开场设计模块输出
 export function generateOpeningOutput(card: CharacterCard): string {
   const { opening, characterInfo } = card;
-  const theme = card.theme;
   const name = characterInfo.name || '[角色名]';
 
-  const sceneInfo = SCENE_INFO_TEMPLATES[theme]
+  const sceneInfo = getSceneInfoTemplate(card)
     .replace('[时辰]', opening.time || '[时辰]')
     .replace('[时间]', opening.time || '[时间]')
     .replace('[地点]', opening.location || '[地点]')
     .replace('[氛围]', opening.atmosphere || '[氛围]');
 
-  const mainContent = MAIN_CONTENT_TEMPLATES[theme]
+  const mainContent = getMainContentTemplate(card)
     .replace('[正文内容，包含对话与 *动作描写*]',
       `${opening.sceneDescription || '[场景描述]'}\n\n${opening.firstDialogue || '「[第一句对话]」'}`)
     .replace('[正文内容]',
       `${opening.sceneDescription || '[场景描述]'}\n\n${opening.firstDialogue || '"[第一句对话]"'}`);
 
-  const statusBar = STATUS_BAR_TEMPLATES[theme]
+  const statusBar = getStatusBarTemplate(card)
     .replace(/\[角色名\]/g, name)
     .replace('[衣着描述]', opening.attire || '[衣着描述]')
     .replace('[动作描述]', opening.action || '[动作描述]')

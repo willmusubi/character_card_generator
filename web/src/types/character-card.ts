@@ -1,13 +1,32 @@
 // 主题类型
-export type ThemeType = 'ancient' | 'cyberpunk' | 'modern' | 'cozy';
+export type ThemeType = 'ancient' | 'cyberpunk' | 'modern' | 'cozy' | 'custom';
 
 // 主题名称映射
 export const THEME_NAMES: Record<ThemeType, string> = {
   ancient: '古风水墨',
   cyberpunk: '赛博朋克',
   modern: '现代简约',
-  cozy: '暖系可爱'
+  cozy: '暖系可爱',
+  custom: 'AI 智能生成'
 };
+
+// 自定义模板（用于 AI 生成的风格）
+export interface CustomTemplates {
+  styleName: string;         // AI 生成的风格名称（如：暗夜玫瑰、冰雪童话）
+  styleDescription: string;  // 风格描述
+  themeCSS: string;          // 完整的 CSS 样式代码（使用 .scene-card 等类名）
+  sceneInfo: string;         // 场景信息 HTML 模板
+  mainContent: string;       // 正文内容 HTML 模板
+  statusBar: string;         // 角色状态栏 HTML 模板
+  sceneCard: string;         // 小剧场场景卡片 HTML 模板
+  colorScheme: {             // 配色方案（用于预览和调试）
+    primary: string;
+    secondary: string;
+    background: string;
+    text: string;
+    accent: string;
+  };
+}
 
 // 模块1: 角色信息
 export interface CharacterInfo {
@@ -110,6 +129,7 @@ export interface CharacterCard {
   createdAt: number;
   updatedAt: number;
   theme: ThemeType;
+  customTemplates?: CustomTemplates; // AI 生成的自定义模板（仅 theme='custom' 时使用）
   characterInfo: CharacterInfo;
   persona: Persona;
   adversityHandling: AdversityHandling;
