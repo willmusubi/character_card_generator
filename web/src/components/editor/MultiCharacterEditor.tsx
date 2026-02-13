@@ -31,6 +31,7 @@ import { MiniTheaterForm } from './forms/MiniTheaterForm';
 // 全局模块表单
 import { PlotSettingForm } from './forms/PlotSettingForm';
 import { OutputSettingForm } from './forms/OutputSettingForm';
+import { OutputModulesForm } from './forms/OutputModulesForm';
 import { OpeningForm } from './forms/OpeningForm';
 import { OpeningExtensionForm } from './forms/OpeningExtensionForm';
 import { SupportingCharactersForm } from './forms/SupportingCharactersForm';
@@ -345,6 +346,13 @@ export function MultiCharacterEditor({
           <OutputSettingForm
             data={card.outputSetting}
             onChange={(data) => onUpdateCard({ outputSetting: data })}
+          />
+        );
+      case 'outputModules':
+        return (
+          <OutputModulesForm
+            data={card.outputModules}
+            onChange={(data) => onUpdateCard({ outputModules: data })}
           />
         );
       case 'opening':

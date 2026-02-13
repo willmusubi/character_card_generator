@@ -30,16 +30,37 @@ export function CharacterTabs({
   onSetPrimary,
   isMultiMode,
 }: CharacterTabsProps) {
-  // 单角色模式下不显示角色标签栏
-  if (!isMultiMode && characters.length <= 1) {
-    return null;
-  }
+  // 单角色模式下只显示简化的切换栏
+  const isSingleCharacterMode = !isMultiMode && characters.length <= 1;
 
   return (
     <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 border-b border-gray-200">
-      {/* 角色标签 */}
+      {/* 角色标签 - 单角色模式下显示简化版本 */}
       <div className="flex items-center gap-1 flex-1 overflow-x-auto">
         {characters.map((char) => {
+          // 单角色模式下只显示当前角色的简化标签
+          if (isSingleCharacterMode) {
+            const isActive = activeContext === 'character';
+            const displayName = char.characterInfo.name || '未命名角色';
+            return (
+              <div
+                key={char.id}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg cursor-pointer transition-all
+                  ${isActive
+                    ? 'bg-blue-100 text-blue-700 border border-blue-300'
+                    : 'bg-white text-gray-600 border border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                  }`}
+                onClick={() => onSelectCharacter(char.id)}
+              >
+                <User className="w-4 h-4" />
+                <span className="text-sm font-medium whitespace-nowrap max-w-[150px] truncate">
+                  {displayName}
+                </span>
+              </div>
+            );
+          }
+
+          // 多角色模式下显示完整标签
           const isActive = activeContext === 'character' && activeCharacterId === char.id;
           const displayName = char.characterInfo.name || '未命名角色';
 

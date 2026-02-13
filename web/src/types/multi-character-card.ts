@@ -22,6 +22,8 @@ import {
   MiniTheater,
   Opening,
   OpeningExtension,
+  OutputModules,
+  createEmptyOutputModules,
 } from './character-card';
 
 // ==================== 关系网类型 ====================
@@ -119,6 +121,7 @@ export interface MultiCharacterCard {
   opening: Opening;                     // 全局开场设计
   openingExtension?: OpeningExtension;  // 开场白扩展
   relationshipNetwork: RelationshipNetwork; // 关系网
+  outputModules?: OutputModules;        // 输出模块系统（状态栏、记忆、手机等）
 
   // ===== 角色列表 =====
   mainCharacters: MainCharacter[];      // 主角列表（1-N 个，平级）
@@ -149,6 +152,7 @@ export type CharacterModuleKey = typeof CHARACTER_MODULE_KEYS[number];
 export const GLOBAL_MODULE_KEYS = [
   'plotSetting',
   'outputSetting',
+  'outputModules',
   'opening',
   'openingExtension',
   'relationshipNetwork',
@@ -175,6 +179,7 @@ export const GLOBAL_MODULE_METAS = [
   { key: 'plotSetting', label: '世界背景', mufyField: '情节设定', wordCount: '200-400字' },
   { key: 'relationshipNetwork', label: '关系网', mufyField: '关系设定' },
   { key: 'outputSetting', label: '输出设定', mufyField: '输出设定' },
+  { key: 'outputModules', label: '输出模块', mufyField: '输出设定' },
   { key: 'opening', label: '开场设计', mufyField: '开场白', wordCount: '300-500字' },
   { key: 'openingExtension', label: '开场白扩展', mufyField: '开场白', wordCount: '50-150字' },
   { key: 'secondaryCharacters', label: '次要角色', mufyField: '副角色', wordCount: '每人50-100字' },
@@ -328,6 +333,7 @@ export function createEmptyMultiCharacterCard(): MultiCharacterCard {
       worldBackgroundDetail: '',
     },
     relationshipNetwork: createEmptyRelationshipNetwork(),
+    outputModules: createEmptyOutputModules(),
     mainCharacters: [firstCharacter],
     secondaryCharacters: [],
   };
@@ -363,4 +369,7 @@ export type {
   MiniTheater,
   Opening,
   OpeningExtension,
+  OutputModules,
 };
+
+export { createEmptyOutputModules };

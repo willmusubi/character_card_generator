@@ -168,6 +168,42 @@ export const MODULE_PROMPTS = {
 - appearance: 简要外貌描述
 - quote: 个性语（一句代表性的台词）
 - relationToMain: 与主角的关系标签`,
+
+  // ===== 输出模块系统 =====
+  characterStatus: `生成角色状态栏内容（每次对话回复时显示）：
+- attire: 当前穿搭描述（详细描写服装、配饰）
+- action: 当前正在做的动作
+- expression: 神态表情描写
+- affection: 好感度（如 "50/100"）
+- innerOS: 内心独白/OS（角色此刻在想什么）
+- relationship: 与用户的关系状态描述
+- todoList: 待办事项数组（3项，角色今天要做的事）
+- randomContent: 随机内容（梦境/回忆/备忘录，>100字，增加角色深度）`,
+
+  memoryArea: `生成记忆区内容（帮助角色"记住"发生的事）：
+- hotSearch: 微博热搜数组（3条与角色/世界观相关的热搜）
+- shortTermMemory: 短期记忆（最近发生的重要事件描述）
+- longTermMemory: 长期记忆说明（角色的重要记忆/执念）
+- danmaku: 三次元弹幕/粉丝评论数组（4条，像B站弹幕一样的评论）`,
+
+  socialMedia: `生成社交媒体内容（手机界面中显示）：
+- chatRecords: 私聊记录数组（3组对话，每组包含 contactName 和 messages 数组）
+- groupChats: 群聊数组（1-2个群，每个包含 groupName、members、messages）
+- moments: 朋友圈动态数组（3条，每条包含 author、content、time、likes、comments）
+- forumPosts: 论坛帖子（可选，校友圈/兴趣圈的帖子）
+- weibo: 微博内容（可选，角色发的微博或相关新闻）`,
+
+  phoneBrowsing: `生成手机浏览记录（展示角色的日常）：
+- browsingHistory: 浏览足迹数组（微博/微信/豆瓣各1条，包含 platform 和 content）
+- recentlyListening: 最近在听的歌曲数组（3首，包含 songName 和 artist）
+- notes: 备忘录/记事本内容（角色的私人笔记）
+- shoppingCart: 购物车内容数组（可选，角色想买的东西）`,
+
+  musicPlayer: `生成音乐播放器内容：
+- enabled: 是否启用（true/false）
+- currentSong: 当前播放的歌（包含 name、artist、album）
+- playlist: 播放列表数组（5-8首歌，每首包含 name、artist）
+- playlistName: 播放列表名称（如"深夜治愈系"、"工作提神曲"）`,
 };
 
 // 生成全部模块的提示词
@@ -275,6 +311,26 @@ export const GENERATE_ALL_PROMPT = `根据用户的描述，生成完整的 Mufy
       "userLabel": ""
     },
     "worldBackgroundDetail": ""
+  },
+  "outputModules": {
+    "characterStatus": {
+      "attire": "当前穿搭描述",
+      "action": "当前动作",
+      "expression": "神态表情",
+      "affection": "50/100",
+      "innerOS": "内心独白",
+      "relationship": "与用户的关系状态",
+      "todoList": ["待办1", "待办2", "待办3"],
+      "randomContent": "随机内容（梦境/回忆/备忘录，>100字）"
+    },
+    "memoryArea": {
+      "hotSearch": ["热搜1", "热搜2", "热搜3"],
+      "shortTermMemory": "短期记忆",
+      "longTermMemory": "长期记忆",
+      "danmaku": ["弹幕1", "弹幕2", "弹幕3", "弹幕4"]
+    },
+    "enablePhoneInterface": false,
+    "enableMusicPlayer": false
   }
 }
 
@@ -282,4 +338,6 @@ export const GENERATE_ALL_PROMPT = `根据用户的描述，生成完整的 Mufy
 1. 确保所有字段都有内容，保持角色一致性
 2. personalityTags 和 quotes 是数组，请提供 2-4 个元素
 3. openingExtension.worldBackgroundDetail 是可选的，仅在多人卡或架空世界场景时需要填写
-4. additionalMainCharacters 和 supportingCharacters 需要根据用户需求单独生成`;
+4. additionalMainCharacters 和 supportingCharacters 需要根据用户需求单独生成
+5. outputModules 中的 characterStatus 和 memoryArea 是必填的，展示角色的状态和记忆
+6. 如果用户需要手机界面或音乐播放器，会单独生成 socialMedia、phoneBrowsing、musicPlayer`;

@@ -757,18 +757,58 @@ export async function generateAllModules(
     worldBackgroundDetail: '',
   };
 
+  // 处理输出模块
+  const generatedOutputModules = data.outputModules as CharacterCard['outputModules'];
+  const outputModules: CharacterCard['outputModules'] = generatedOutputModules ? {
+    characterStatus: {
+      attire: generatedOutputModules.characterStatus?.attire || '',
+      action: generatedOutputModules.characterStatus?.action || '',
+      expression: generatedOutputModules.characterStatus?.expression || '',
+      affection: generatedOutputModules.characterStatus?.affection || '50/100',
+      innerOS: generatedOutputModules.characterStatus?.innerOS || '',
+      relationship: generatedOutputModules.characterStatus?.relationship || '',
+      todoList: generatedOutputModules.characterStatus?.todoList || [],
+      randomContent: generatedOutputModules.characterStatus?.randomContent || '',
+    },
+    memoryArea: {
+      hotSearch: generatedOutputModules.memoryArea?.hotSearch || [],
+      shortTermMemory: generatedOutputModules.memoryArea?.shortTermMemory || '',
+      longTermMemory: generatedOutputModules.memoryArea?.longTermMemory || '',
+      danmaku: generatedOutputModules.memoryArea?.danmaku || [],
+    },
+    enablePhoneInterface: generatedOutputModules.enablePhoneInterface || false,
+    enableMusicPlayer: generatedOutputModules.enableMusicPlayer || false,
+  } : undefined;
+
   return {
     card: {
       theme,
       characterInfo,
       persona,
-      adversityHandling: data.adversityHandling as CharacterCard['adversityHandling'],
-      plotSetting: data.plotSetting as CharacterCard['plotSetting'],
+      adversityHandling: data.adversityHandling as CharacterCard['adversityHandling'] || {
+        inappropriateRequest: '',
+        insufficientInfo: '',
+        emotionalAttack: '',
+        beyondCapability: '',
+      },
+      plotSetting: data.plotSetting as CharacterCard['plotSetting'] || {
+        worldBackground: '',
+        establishedFacts: '',
+        unchangeableRules: '',
+        currentPhase: '',
+      },
       outputSetting,
-      sampleDialogue: data.sampleDialogue as CharacterCard['sampleDialogue'],
+      sampleDialogue: data.sampleDialogue as CharacterCard['sampleDialogue'] || {
+        dialogue1User: '',
+        dialogue1Response: '',
+        dialogue2User: '',
+        dialogue2Response: '',
+        styleNotes: '',
+      },
       miniTheater,
       opening,
       openingExtension,
+      outputModules,
       // 多主角和副角色需要单独生成，这里保持空数组
       additionalMainCharacters: [],
       supportingCharacters: [],
@@ -1269,7 +1309,27 @@ const MULTI_CHARACTER_SYSTEM_PROMPT = `你是一个专业的角色卡生成助�
       }
     }
   ],
-  "secondaryCharacters": []
+  "secondaryCharacters": [],
+  "outputModules": {
+    "characterStatus": {
+      "attire": "当前穿搭描述（详细）",
+      "action": "当前动作",
+      "expression": "神态表情",
+      "affection": "50/100",
+      "innerOS": "内心独白（角色此刻在想什么）",
+      "relationship": "与用户的关系状态",
+      "todoList": ["待办1", "待办2", "待办3"],
+      "randomContent": "随机内容（梦境/回忆/备忘录，>100字，增加角色深度）"
+    },
+    "memoryArea": {
+      "hotSearch": ["热搜1", "热搜2", "热搜3"],
+      "shortTermMemory": "短期记忆（最近发生的事）",
+      "longTermMemory": "长期记忆说明",
+      "danmaku": ["弹幕1", "弹幕2", "弹幕3", "弹幕4"]
+    },
+    "enablePhoneInterface": false,
+    "enableMusicPlayer": false
+  }
 }
 \`\`\`
 
@@ -1277,7 +1337,8 @@ const MULTI_CHARACTER_SYSTEM_PROMPT = `你是一个专业的角色卡生成助�
 
 1. **mainCharacters 数组中的每个角色都必须包含完整的 characterInfo、persona、adversityHandling、sampleDialogue、miniTheater**
 2. **每个角色的所有字段都必须填写具体内容，不能为空**
-3. **请为每个检测到的角色生成完整的独立数据**`;
+3. **请为每个检测到的角色生成完整的独立数据**
+4. **outputModules 是全局共享的，包含角色状态栏和记忆区，必须生成**`;
 
 // 生成多角色卡
 export async function generateMultiCharacterCard(
@@ -1403,14 +1464,15 @@ function convertToMultiCharacterCard(
     id: card.id || `multicard_${Date.now()}`,
     createdAt: card.createdAt || Date.now(),
     updatedAt: Date.now(),
-    cardName: card.characterInfo.name || '未命名角色',
+    cardName: card.characterInfo?.name || '未命名角色',
     cardType: 'single',
     theme,
     customTemplates: card.customTemplates,
-    plotSetting: card.plotSetting,
-    outputSetting: card.outputSetting,
-    opening: card.opening,
-    openingExtension: card.openingExtension,
+    plotSetting: card.plotSetting || baseCard.plotSetting,
+    outputSetting: card.outputSetting || baseCard.outputSetting,
+    opening: card.opening || baseCard.opening,
+    openingExtension: card.openingExtension || baseCard.openingExtension,
+    outputModules: card.outputModules || baseCard.outputModules,
     mainCharacters: [mainChar],
     secondaryCharacters: card.supportingCharacters?.map(s => ({
       id: s.id,
@@ -1519,6 +1581,26 @@ function buildMultiCharacterCard(
       relationships: data.relationshipNetwork?.relationships || [],
       userRelationships: data.relationshipNetwork?.userRelationships || [],
     },
+    outputModules: data.outputModules ? {
+      characterStatus: {
+        attire: data.outputModules.characterStatus?.attire || '',
+        action: data.outputModules.characterStatus?.action || '',
+        expression: data.outputModules.characterStatus?.expression || '',
+        affection: data.outputModules.characterStatus?.affection || '50/100',
+        innerOS: data.outputModules.characterStatus?.innerOS || '',
+        relationship: data.outputModules.characterStatus?.relationship || '',
+        todoList: data.outputModules.characterStatus?.todoList || [],
+        randomContent: data.outputModules.characterStatus?.randomContent || '',
+      },
+      memoryArea: {
+        hotSearch: data.outputModules.memoryArea?.hotSearch || [],
+        shortTermMemory: data.outputModules.memoryArea?.shortTermMemory || '',
+        longTermMemory: data.outputModules.memoryArea?.longTermMemory || '',
+        danmaku: data.outputModules.memoryArea?.danmaku || [],
+      },
+      enablePhoneInterface: data.outputModules.enablePhoneInterface || false,
+      enableMusicPlayer: data.outputModules.enableMusicPlayer || false,
+    } : baseCard.outputModules,
     mainCharacters,
     secondaryCharacters: data.secondaryCharacters || [],
   };

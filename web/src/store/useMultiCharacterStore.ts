@@ -454,8 +454,9 @@ if (oldData) {
           console.log(`[Store] 已迁移 ${newCards.length} 个卡片到新存储`);
         }
 
-        // 清理旧存储（可选，保留作为备份）
-        // localStorage.removeItem(OLD_STORAGE_KEY);
+        // 迁移完成后清理旧存储，防止重复迁移
+        localStorage.removeItem(OLD_STORAGE_KEY);
+        console.log('[Store] 已清理旧版存储');
       }
     }
   } catch (e) {

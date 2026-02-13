@@ -193,6 +193,150 @@ export interface SupportingCharacter {
   relationToMain: string;        // 与主角关系标签
 }
 
+// ==================== 输出模块系统 ====================
+
+/**
+ * 角色状态栏（必选模块）
+ * 每次对话回复时显示的角色状态信息
+ */
+export interface CharacterStatus {
+  attire: string;                // 当前穿搭描述
+  action: string;                // 当前动作
+  expression: string;            // 神态表情
+  affection: string;             // 好感度（如 "10/100"）
+  innerOS: string;               // 内心独白/OS
+  relationship: string;          // 与用户的关系状态
+  todoList: string[];            // 待办事项（3项）
+  randomContent: string;         // 随机内容（梦境/回忆/备忘录，>100字）
+}
+
+/**
+ * 记忆区（必选模块）
+ * 角色的记忆系统
+ */
+export interface MemoryArea {
+  hotSearch: string[];           // 微博热搜（3条相关热搜）
+  shortTermMemory: string;       // 短期记忆（最近发生的事）
+  longTermMemory: string;        // 长期记忆说明
+  danmaku: string[];             // 三次元弹幕/粉丝评论（4条）
+}
+
+/**
+ * 聊天记录（可选模块 - 手机界面的一部分）
+ */
+export interface ChatRecord {
+  id: string;
+  contactName: string;           // 联系人名称
+  contactAvatar?: string;        // 联系人头像（可选）
+  messages: {
+    sender: 'self' | 'other';    // 发送者
+    content: string;             // 消息内容
+    time?: string;               // 时间
+  }[];
+}
+
+/**
+ * 群聊记录
+ */
+export interface GroupChat {
+  id: string;
+  groupName: string;             // 群名
+  members: string[];             // 群成员名称列表
+  messages: {
+    sender: string;              // 发送者名称
+    content: string;             // 消息内容
+    time?: string;               // 时间
+  }[];
+}
+
+/**
+ * 朋友圈/动态
+ */
+export interface MomentsPost {
+  id: string;
+  author: string;                // 发布者
+  content: string;               // 内容
+  images?: string[];             // 图片描述（可选）
+  time: string;                  // 发布时间
+  likes: string[];               // 点赞的人
+  comments: {
+    author: string;
+    content: string;
+    replyTo?: string;            // 回复某人
+  }[];
+}
+
+/**
+ * 社交媒体内容（可选模块 - 手机界面的一部分）
+ */
+export interface SocialMedia {
+  chatRecords: ChatRecord[];     // 私聊记录（3组）
+  groupChats: GroupChat[];       // 群聊（1-2个）
+  moments: MomentsPost[];        // 朋友圈动态（3条）
+  forumPosts?: {                 // 论坛/校友圈帖子
+    title: string;
+    content: string;
+    comments: string[];
+  }[];
+  weibo?: {                      // 微博内容
+    title: string;
+    content: string;
+    comments: string[];
+  }[];
+}
+
+/**
+ * 手机浏览记录（可选模块 - 手机界面的一部分）
+ */
+export interface PhoneBrowsing {
+  browsingHistory: {             // 浏览足迹
+    platform: string;            // 微博/微信/豆瓣等
+    content: string;             // 浏览内容描述
+  }[];
+  recentlyListening: {           // 最近在听
+    songName: string;
+    artist: string;
+  }[];
+  notes: string;                 // 备忘录/记事本内容
+  shoppingCart?: string[];       // 购物车内容
+}
+
+/**
+ * 音乐播放器（可选模块）
+ */
+export interface MusicPlayer {
+  enabled: boolean;              // 是否启用
+  currentSong?: {
+    name: string;
+    artist: string;
+    album?: string;
+    cover?: string;              // 封面图片URL/描述
+  };
+  playlist: {
+    name: string;
+    artist: string;
+  }[];
+  playlistName: string;          // 播放列表名称（如 "深夜治愈系"）
+}
+
+/**
+ * 输出模块配置
+ * 定义哪些模块显示，以及它们的内容
+ */
+export interface OutputModules {
+  // ===== 必选模块（每次显示）=====
+  characterStatus: CharacterStatus;
+  memoryArea: MemoryArea;
+
+  // ===== 可选模块（增加游戏性）=====
+  enablePhoneInterface: boolean;     // 是否启用手机界面
+  enableMusicPlayer: boolean;        // 是否启用音乐播放器
+
+  socialMedia?: SocialMedia;         // 社交媒体内容
+  phoneBrowsing?: PhoneBrowsing;     // 手机浏览记录
+  musicPlayer?: MusicPlayer;         // 音乐播放器
+}
+
 // 完整角色卡
 export interface CharacterCard {
   id: string;
@@ -212,6 +356,7 @@ export interface CharacterCard {
   openingExtension?: OpeningExtension;
   additionalMainCharacters?: AdditionalMainCharacter[];  // 最多3个
   supportingCharacters?: SupportingCharacter[];          // 数量不限
+  outputModules?: OutputModules;                          // 输出模块系统
 }
 
 // 模块元信息
@@ -235,7 +380,37 @@ export const MODULE_METAS: ModuleMeta[] = [
   { key: 'openingExtension', label: '开场白扩展', mufyField: '开场白', wordCount: '50-150字' },
   { key: 'additionalMainCharacters', label: '多主角', mufyField: '主人物简介', wordCount: '每人200-400字' },
   { key: 'supportingCharacters', label: '副角色', mufyField: '副角色', wordCount: '每人50-100字' },
+  // ===== 输出模块 =====
+  { key: 'outputModules', label: '输出模块', mufyField: '输出设定' },
 ];
+
+/**
+ * 创建空的输出模块配置
+ */
+export function createEmptyOutputModules(): OutputModules {
+  return {
+    // 必选模块
+    characterStatus: {
+      attire: '',
+      action: '',
+      expression: '',
+      affection: '50/100',
+      innerOS: '',
+      relationship: '',
+      todoList: [],
+      randomContent: '',
+    },
+    memoryArea: {
+      hotSearch: [],
+      shortTermMemory: '',
+      longTermMemory: '',
+      danmaku: [],
+    },
+    // 可选模块开关
+    enablePhoneInterface: false,
+    enableMusicPlayer: false,
+  };
+}
 
 // 创建空角色卡
 export function createEmptyCard(): CharacterCard {
@@ -341,5 +516,7 @@ export function createEmptyCard(): CharacterCard {
     },
     additionalMainCharacters: [],
     supportingCharacters: [],
+    // 输出模块
+    outputModules: createEmptyOutputModules(),
   };
 }
