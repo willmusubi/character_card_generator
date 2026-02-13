@@ -1,9 +1,9 @@
-import { Plus, Trash2, Copy, User, Wand2 } from 'lucide-react';
-import { CharacterCard } from '../../types/character-card';
+import { Plus, Trash2, Copy, User, Users, Wand2 } from 'lucide-react';
+import { MultiCharacterCard } from '../../types/multi-character-card';
 import { Button } from '../ui/Button';
 
 interface SidebarProps {
-  cards: CharacterCard[];
+  cards: MultiCharacterCard[];
   activeCardId: string | null;
   onSelectCard: (id: string) => void;
   onCreateCard: () => void;
@@ -43,57 +43,65 @@ export function Sidebar({
           </div>
         ) : (
           <div className="space-y-1">
-            {cards.map((card) => (
-              <div
-                key={card.id}
-                onClick={() => onSelectCard(card.id)}
-                className={`group flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-colors
-                  ${activeCardId === card.id
-                    ? 'bg-blue-50 border border-blue-200'
-                    : 'hover:bg-gray-100 border border-transparent'
-                  }`}
-              >
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0
-                  ${activeCardId === card.id ? 'bg-blue-100 text-blue-600' : 'bg-gray-200 text-gray-500'}`}>
-                  <User className="w-4 h-4" />
-                </div>
+            {cards.map((card) => {
+              const isMulti = card.cardType === 'multi' || card.mainCharacters.length > 1;
+              const displayName = card.cardName || card.mainCharacters[0]?.characterInfo.name || '未命名角色';
+              const subtitle = isMulti
+                ? `${card.mainCharacters.length} 位角色`
+                : card.mainCharacters[0]?.characterInfo.positioning || '暂无定位';
 
-                <div className="flex-1 min-w-0">
-                  <div className={`text-sm font-medium truncate
-                    ${activeCardId === card.id ? 'text-blue-900' : 'text-gray-900'}`}>
-                    {card.characterInfo.name || '未命名角色'}
+              return (
+                <div
+                  key={card.id}
+                  onClick={() => onSelectCard(card.id)}
+                  className={`group flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-colors
+                    ${activeCardId === card.id
+                      ? 'bg-blue-50 border border-blue-200'
+                      : 'hover:bg-gray-100 border border-transparent'
+                    }`}
+                >
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0
+                    ${activeCardId === card.id ? 'bg-blue-100 text-blue-600' : 'bg-gray-200 text-gray-500'}`}>
+                    {isMulti ? <Users className="w-4 h-4" /> : <User className="w-4 h-4" />}
                   </div>
-                  <div className="text-xs text-gray-400 truncate">
-                    {card.characterInfo.positioning || '暂无定位'}
-                  </div>
-                </div>
 
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDuplicateCard(card.id);
-                    }}
-                    className="p-1 hover:bg-gray-200 rounded"
-                    title="复制"
-                  >
-                    <Copy className="w-3.5 h-3.5 text-gray-400" />
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (confirm('确定要删除这个角色卡吗？')) {
-                        onDeleteCard(card.id);
-                      }
-                    }}
-                    className="p-1 hover:bg-red-100 rounded"
-                    title="删除"
-                  >
-                    <Trash2 className="w-3.5 h-3.5 text-gray-400 hover:text-red-500" />
-                  </button>
+                  <div className="flex-1 min-w-0">
+                    <div className={`text-sm font-medium truncate
+                      ${activeCardId === card.id ? 'text-blue-900' : 'text-gray-900'}`}>
+                      {displayName}
+                    </div>
+                    <div className="text-xs text-gray-400 truncate">
+                      {subtitle}
+                    </div>
+                  </div>
+
+                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDuplicateCard(card.id);
+                      }}
+                      className="p-1 hover:bg-gray-200 rounded"
+                      title="复制"
+                    >
+                      <Copy className="w-3.5 h-3.5 text-gray-400" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (confirm('确定要删除这个角色卡吗？')) {
+                          onDeleteCard(card.id);
+                        }
+                      }}
+                      className="p-1 hover:bg-red-100 rounded"
+                      title="删除"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-gray-400 hover:text-red-500" />
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

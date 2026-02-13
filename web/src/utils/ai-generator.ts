@@ -1,6 +1,19 @@
 import { AppSettings, PROVIDER_CONFIGS } from '../types/settings';
-import { CharacterCard, ThemeType, CustomTemplates } from '../types/character-card';
+import { CharacterCard, ThemeType, CustomTemplates, WordCountRange } from '../types/character-card';
+import {
+  MultiCharacterCard,
+  MainCharacter,
+  createEmptyMultiCharacterCard,
+  createEmptyMainCharacter,
+} from '../types/multi-character-card';
 import { SYSTEM_PROMPT, SEARCH_SYSTEM_PROMPT, GENERATE_ALL_PROMPT, MODULE_PROMPTS } from '../data/ai-prompts';
+
+// 字数范围设置
+export interface WordCountSettings {
+  replyLength: WordCountRange;
+  opening: WordCountRange;
+  miniTheater: WordCountRange;
+}
 import {
   OPENAI_TOOLS,
   CLAUDE_TOOLS,
@@ -304,12 +317,35 @@ async function callGeminiWithSearch(
   });
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error?.message || 'Gemini API 调用失败');
+    const errorText = await response.text();
+    console.error('[Gemini] API 错误响应:', errorText);
+    try {
+      const error = JSON.parse(errorText);
+      throw new Error(error.error?.message || error.message || `Gemini API 调用失败: ${response.status}`);
+    } catch (parseError) {
+      throw new Error(`Gemini API 调用失败: ${response.status} - ${errorText.substring(0, 200)}`);
+    }
   }
 
   const data = await response.json();
+
+  // 检查是否有 candidates
+  if (!data.candidates || data.candidates.length === 0) {
+    console.error('[Gemini] 无效响应，没有 candidates:', data);
+    // 检查是否有安全过滤
+    if (data.promptFeedback?.blockReason) {
+      throw new Error(`Gemini 内容被安全过滤: ${data.promptFeedback.blockReason}`);
+    }
+    throw new Error('Gemini 返回空响应，请重试');
+  }
+
   const candidate = data.candidates[0];
+
+  // 检查是否被安全过滤
+  if (candidate.finishReason === 'SAFETY') {
+    console.error('[Gemini] 内容被安全过滤:', candidate.safetyRatings);
+    throw new Error('内容被 Gemini 安全过滤，请修改输入后重试');
+  }
 
   // 检查是否使用了搜索
   let searchSources: SearchSource[] | undefined;
@@ -333,6 +369,12 @@ async function callGeminiWithSearch(
     }
   } else {
     console.log('[Gemini] ❌ 未使用搜索（无 groundingMetadata）');
+  }
+
+  // 检查响应内容是否存在
+  if (!candidate.content || !candidate.content.parts || candidate.content.parts.length === 0) {
+    console.error('[Gemini] 无效的响应内容:', candidate);
+    throw new Error('Gemini 返回了空内容，请重试');
   }
 
   return {
@@ -597,17 +639,41 @@ export async function generateAllModules(
   settings: AppSettings,
   theme: ThemeType = 'modern',
   onProgress?: (module: string, progress: number) => void,
-  enableSearch: boolean = false
+  enableSearch: boolean = false,
+  wordCountSettings?: WordCountSettings
 ): Promise<GenerationResult> {
   const shouldSearch = enableSearch && settings.enableSearch && PROVIDER_CONFIGS[settings.provider].supportsSearch;
 
   const systemPrompt = shouldSearch ? SEARCH_SYSTEM_PROMPT : SYSTEM_PROMPT;
 
+  // 构建字数要求说明
+  const wordCountInstructions = wordCountSettings
+    ? `\n\n**【最重要】字数要求**
+请严格遵守以下字数要求（统计纯文本字数，不包括HTML标签、CSS样式代码）：
+
+1. **outputSetting.replyLength** = "${wordCountSettings.replyLength.min}-${wordCountSettings.replyLength.max}字"
+
+2. **opening 开场设计**：纯文本内容总计 ${wordCountSettings.opening.min}-${wordCountSettings.opening.max} 字
+   - sceneDescription（场景描述）：至少 ${Math.floor(wordCountSettings.opening.min * 0.3)} 字，详细描写环境、氛围
+   - firstDialogue（开场白）：至少 ${Math.floor(wordCountSettings.opening.min * 0.3)} 字，体现角色性格
+   - innerThought（内心独白）：至少 ${Math.floor(wordCountSettings.opening.min * 0.2)} 字，展现角色心理
+
+3. **miniTheater 小剧场**：每个场景 ${wordCountSettings.miniTheater.min}-${wordCountSettings.miniTheater.max} 字
+   - scene1Dialogue + scene1Action：总计 ${wordCountSettings.miniTheater.min}-${wordCountSettings.miniTheater.max} 字
+   - scene2Dialogue + scene2Action：总计 ${wordCountSettings.miniTheater.min}-${wordCountSettings.miniTheater.max} 字
+   - scene3Dialogue + scene3Action：总计 ${wordCountSettings.miniTheater.min}-${wordCountSettings.miniTheater.max} 字
+
+**重要提醒**：
+- 请务必生成足够丰富的内容，每个场景都要有详细的对话和动作描写
+- 不要因为字数限制而省略内容，宁可略超字数也不要内容过少
+- 对话和动作描写要具体生动，避免空洞简短的表述`
+    : '';
+
   const messages: Message[] = [
     { role: 'system', content: systemPrompt },
     {
       role: 'user',
-      content: `${GENERATE_ALL_PROMPT}\n\n用户描述：\n${userPrompt}\n\n选择的主题风格：${theme}`,
+      content: `${GENERATE_ALL_PROMPT}\n\n用户描述：\n${userPrompt}\n\n选择的主题风格：${theme}${wordCountInstructions}`,
     },
   ];
 
@@ -625,17 +691,87 @@ export async function generateAllModules(
 
   onProgress?.('完成', 100);
 
+  // 合并字数范围设置到生成的数据中
+  const generatedOutputSetting = data.outputSetting as CharacterCard['outputSetting'];
+  const outputSetting: CharacterCard['outputSetting'] = {
+    replyLength: wordCountSettings
+      ? `${wordCountSettings.replyLength.min}-${wordCountSettings.replyLength.max}字`
+      : generatedOutputSetting?.replyLength || '200-400字',
+    replyLengthRange: wordCountSettings?.replyLength || { min: 200, max: 400 },
+    languageStyle: generatedOutputSetting?.languageStyle || '',
+    perspective: generatedOutputSetting?.perspective || '第一人称',
+    actionFormat: generatedOutputSetting?.actionFormat || '使用 *动作* 格式',
+    moduleRules: generatedOutputSetting?.moduleRules || '',
+  };
+
+  const generatedMiniTheater = data.miniTheater as CharacterCard['miniTheater'];
+  const miniTheater: CharacterCard['miniTheater'] = {
+    ...generatedMiniTheater,
+    wordCountRange: wordCountSettings?.miniTheater || { min: 200, max: 400 },
+  };
+
+  const generatedOpening = data.opening as CharacterCard['opening'];
+  const opening: CharacterCard['opening'] = {
+    ...generatedOpening,
+    wordCountRange: wordCountSettings?.opening || { min: 300, max: 500 },
+  };
+
+  // 处理角色信息（包含新字段）
+  const generatedCharacterInfo = data.characterInfo as CharacterCard['characterInfo'];
+  const characterInfo: CharacterCard['characterInfo'] = {
+    ...generatedCharacterInfo,
+    // 确保新字段有默认值
+    height: generatedCharacterInfo?.height || '',
+    weight: generatedCharacterInfo?.weight || '',
+    zodiac: generatedCharacterInfo?.zodiac || '',
+    mbti: generatedCharacterInfo?.mbti || '',
+    race: generatedCharacterInfo?.race || '',
+    occupation: generatedCharacterInfo?.occupation || '',
+  };
+
+  // 处理人设（包含新字段）
+  const generatedPersona = data.persona as CharacterCard['persona'];
+  const persona: CharacterCard['persona'] = {
+    ...generatedPersona,
+    // 确保新字段有默认值
+    personalityTags: generatedPersona?.personalityTags || [],
+    lifeStory: generatedPersona?.lifeStory || { childhood: '', growth: '', turning: '' },
+    quotes: generatedPersona?.quotes || [],
+    interview: generatedPersona?.interview || '',
+    // 确保 languageExamples 存在
+    languageExamples: generatedPersona?.languageExamples || { daily: '', happy: '', angry: '', flirty: '' },
+  };
+
+  // 处理开场白扩展（新模块）
+  const generatedOpeningExtension = data.openingExtension as CharacterCard['openingExtension'];
+  const openingExtension: CharacterCard['openingExtension'] = generatedOpeningExtension ? {
+    cardSummary: generatedOpeningExtension.cardSummary || '',
+    relationshipSummary: {
+      characterLabel: generatedOpeningExtension.relationshipSummary?.characterLabel || '',
+      userLabel: generatedOpeningExtension.relationshipSummary?.userLabel || '',
+    },
+    worldBackgroundDetail: generatedOpeningExtension.worldBackgroundDetail || '',
+  } : {
+    cardSummary: '',
+    relationshipSummary: { characterLabel: '', userLabel: '' },
+    worldBackgroundDetail: '',
+  };
+
   return {
     card: {
       theme,
-      characterInfo: data.characterInfo as CharacterCard['characterInfo'],
-      persona: data.persona as CharacterCard['persona'],
+      characterInfo,
+      persona,
       adversityHandling: data.adversityHandling as CharacterCard['adversityHandling'],
       plotSetting: data.plotSetting as CharacterCard['plotSetting'],
-      outputSetting: data.outputSetting as CharacterCard['outputSetting'],
+      outputSetting,
       sampleDialogue: data.sampleDialogue as CharacterCard['sampleDialogue'],
-      miniTheater: data.miniTheater as CharacterCard['miniTheater'],
-      opening: data.opening as CharacterCard['opening'],
+      miniTheater,
+      opening,
+      openingExtension,
+      // 多主角和副角色需要单独生成，这里保持空数组
+      additionalMainCharacters: [],
+      supportingCharacters: [],
     },
     searchSources: response.searchSources,
   };
@@ -845,6 +981,112 @@ ${characterInfo.personality ? `性格特点：${characterInfo.personality}` : ''
   };
 }
 
+// 生成多主角（用于多人卡场景）
+export async function generateAdditionalMainCharacters(
+  mainCharacterInfo: CharacterCard['characterInfo'],
+  worldBackground: string,
+  count: number,
+  settings: AppSettings
+): Promise<CharacterCard['additionalMainCharacters']> {
+  const messages: Message[] = [
+    { role: 'system', content: SYSTEM_PROMPT },
+    {
+      role: 'user',
+      content: `基于主角设定，生成 ${count} 个额外的主角角色（用于多人卡场景）。
+
+主角信息：
+- 名称：${mainCharacterInfo.name}
+- 定位：${mainCharacterInfo.positioning}
+- 与用户关系：${mainCharacterInfo.relationshipWithUser}
+
+世界观背景：${worldBackground || '现代都市'}
+
+${MODULE_PROMPTS.additionalMainCharacters}
+
+请返回 JSON 格式：
+{
+  "additionalMainCharacters": [
+    {
+      "id": "char_xxx",
+      "name": "",
+      "age": "",
+      "height": "",
+      "weight": "",
+      "zodiac": "",
+      "mbti": "",
+      "identity": "",
+      "race": "",
+      "appearance": "",
+      "personalityTags": [],
+      "personalityAnalysis": "",
+      "lifeStory": { "childhood": "", "growth": "", "turning": "" },
+      "quotes": [],
+      "relationToUser": ""
+    }
+  ]
+}
+
+注意：
+1. 每个角色要有独特的性格和定位
+2. 角色之间的关系要有互动性
+3. 与主角的关系要明确`,
+    },
+  ];
+
+  const response = await callAPISimple(messages, settings);
+  const data = parseJSONResponse(response.content);
+
+  return (data.additionalMainCharacters as CharacterCard['additionalMainCharacters']) || [];
+}
+
+// 生成副角色（精简版）
+export async function generateSupportingCharacters(
+  mainCharacterInfo: CharacterCard['characterInfo'],
+  worldBackground: string,
+  count: number,
+  settings: AppSettings
+): Promise<CharacterCard['supportingCharacters']> {
+  const messages: Message[] = [
+    { role: 'system', content: SYSTEM_PROMPT },
+    {
+      role: 'user',
+      content: `基于主角设定，生成 ${count} 个副角色（出场有限的配角）。
+
+主角信息：
+- 名称：${mainCharacterInfo.name}
+- 定位：${mainCharacterInfo.positioning}
+
+世界观背景：${worldBackground || '现代都市'}
+
+${MODULE_PROMPTS.supportingCharacters}
+
+请返回 JSON 格式：
+{
+  "supportingCharacters": [
+    {
+      "id": "support_xxx",
+      "name": "",
+      "identity": "",
+      "appearance": "",
+      "quote": "",
+      "relationToMain": ""
+    }
+  ]
+}
+
+注意：
+1. 副角色只需要精简信息
+2. 个性语要能体现角色特点
+3. 与主角的关系标签要简洁明了（如：唯一能制住他的人、损友、经纪人等）`,
+    },
+  ];
+
+  const response = await callAPISimple(messages, settings);
+  const data = parseJSONResponse(response.content);
+
+  return (data.supportingCharacters as CharacterCard['supportingCharacters']) || [];
+}
+
 // 测试 API 连接
 export async function testConnection(settings: AppSettings): Promise<boolean> {
   try {
@@ -857,4 +1099,427 @@ export async function testConnection(settings: AppSettings): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+// ============== 多角色卡生成 ==============
+
+// 多角色生成结果类型
+export interface MultiCharacterGenerationResult {
+  card: MultiCharacterCard;
+  searchSources?: SearchSource[];
+}
+
+// 检测用户输入是否包含多个角色
+export function detectMultipleCharacters(prompt: string): string[] {
+  // 常见的多角色连接词
+  const connectors = ['和', '与', '、', '以及', '还有', '加上', '&', ',', '，'];
+
+  // 检测 "XX和YY" 或 "XX、YY、ZZ" 模式
+  for (const connector of connectors) {
+    if (prompt.includes(connector)) {
+      // 尝试提取角色名
+      const parts = prompt.split(new RegExp(`[${connectors.join('')}]`)).map(s => s.trim()).filter(s => s);
+      if (parts.length >= 2) {
+        // 验证每个部分是否像角色名（至少2个字符）
+        const validNames = parts.filter(p => p.length >= 2 && p.length <= 20);
+        if (validNames.length >= 2) {
+          return validNames;
+        }
+      }
+    }
+  }
+
+  return [];
+}
+
+// 生成多角色卡的系统提示
+const MULTI_CHARACTER_SYSTEM_PROMPT = `你是一个专业的角色卡生成助手。你的任务是根据用户的描述，为多个角色分别生成完整的角色卡数据。
+
+## 重要原则
+
+1. **角色独立性**：每个角色都有独立的人设、逆境处理、样例对话、小剧场
+2. **全局共享**：世界背景、输出设定、开场设计是所有角色共享的
+3. **关系网络**：需要定义角色之间的关系，以及每个角色与用户的关系
+
+## 输出格式
+
+请严格按照以下 JSON 格式输出，**每个字段都必须填写完整内容**：
+
+\`\`\`json
+{
+  "cardName": "角色A & 角色B",
+  "cardType": "multi",
+  "plotSetting": {
+    "worldBackground": "世界背景描述（详细描写这个故事发生的世界）",
+    "establishedFacts": "已发生的事实（不可推翻的设定）",
+    "unchangeableRules": "不可改变的规则",
+    "currentPhase": "当前阶段"
+  },
+  "outputSetting": {
+    "replyLength": "200-400字",
+    "languageStyle": "语言风格",
+    "perspective": "第一人称",
+    "actionFormat": "使用 *动作* 格式",
+    "moduleRules": ""
+  },
+  "opening": {
+    "time": "时间",
+    "location": "地点",
+    "atmosphere": "氛围",
+    "sceneDescription": "场景描述（至少100字）",
+    "firstDialogue": "开场对话（至少50字）",
+    "attire": "穿着描述",
+    "action": "动作描述",
+    "expression": "神态描述",
+    "innerThought": "内心独白（至少30字）"
+  },
+  "relationshipNetwork": {
+    "relationships": [
+      {
+        "characterId1": "char_1",
+        "characterId2": "char_2",
+        "labelFrom1To2": "角色1对角色2的看法",
+        "labelFrom2To1": "角色2对角色1的看法",
+        "relationshipType": "关系类型",
+        "history": "关系历史",
+        "dynamics": "当前动态"
+      }
+    ],
+    "userRelationships": [
+      {
+        "characterId": "char_1",
+        "labelFromUser": "用户对角色的看法",
+        "labelToUser": "角色对用户的看法",
+        "relationshipType": "关系类型"
+      }
+    ]
+  },
+  "mainCharacters": [
+    {
+      "id": "char_1",
+      "isPrimaryFocus": true,
+      "characterInfo": {
+        "name": "角色名称",
+        "gender": "性别",
+        "age": "年龄",
+        "positioning": "一句话角色定位",
+        "relationshipWithUser": "与用户的关系",
+        "coreValue": "角色能给用户带来什么",
+        "useCase": "适合的使用场景",
+        "height": "身高",
+        "weight": "体重",
+        "zodiac": "星座",
+        "mbti": "MBTI类型",
+        "race": "种族",
+        "occupation": "职业/身份"
+      },
+      "persona": {
+        "identity": "身份背景",
+        "appearance": "详细外貌描述（至少50字）",
+        "voice": "声音特点",
+        "dressStyle": "穿衣风格",
+        "foodPreference": "饮食偏好",
+        "hobbies": "兴趣爱好",
+        "personalities": "性格特点详细描述",
+        "personalityTags": ["标签1", "标签2", "标签3"],
+        "emotionToUser": "对用户的情感态度",
+        "brief": "2-3句话的角色简介",
+        "backstory": "角色背景故事",
+        "lifeStory": {
+          "childhood": "童年经历",
+          "growth": "成长过程",
+          "turning": "关键转折点"
+        },
+        "quotes": ["语录1", "语录2", "语录3"],
+        "interview": "采访内容",
+        "languageStyle": "语言风格描述",
+        "languageExamples": {
+          "daily": "日常说话示例",
+          "happy": "开心时说话示例",
+          "angry": "生气时说话示例",
+          "flirty": "撒娇时说话示例"
+        },
+        "attitudeToUser": "对用户的态度",
+        "dialogueRequirements": "台词要求",
+        "boundaries": "行为边界（永远不会做的事）"
+      },
+      "adversityHandling": {
+        "inappropriateRequest": "用户请求不当内容时的回应",
+        "insufficientInfo": "信息不足时的回应",
+        "emotionalAttack": "用户情绪激动时的回应",
+        "beyondCapability": "超出能力范围时的回应"
+      },
+      "sampleDialogue": {
+        "dialogue1User": "用户说的第一句话",
+        "dialogue1Response": "角色的回复（至少50字，体现角色性格）",
+        "dialogue2User": "用户说的第二句话",
+        "dialogue2Response": "角色的回复（至少50字，体现角色性格）",
+        "styleNotes": "文风说明"
+      },
+      "miniTheater": {
+        "scene1Title": "场景1标题",
+        "scene1Dialogue": "场景1对话内容（至少100字）",
+        "scene1Action": "场景1动作描写（至少50字）",
+        "scene2Title": "场景2标题",
+        "scene2Dialogue": "场景2对话内容（至少100字）",
+        "scene2Action": "场景2动作描写（至少50字）",
+        "scene3Title": "场景3标题",
+        "scene3Dialogue": "场景3对话内容（至少100字）",
+        "scene3Action": "场景3动作描写（至少50字）"
+      }
+    }
+  ],
+  "secondaryCharacters": []
+}
+\`\`\`
+
+## 重要说明
+
+1. **mainCharacters 数组中的每个角色都必须包含完整的 characterInfo、persona、adversityHandling、sampleDialogue、miniTheater**
+2. **每个角色的所有字段都必须填写具体内容，不能为空**
+3. **请为每个检测到的角色生成完整的独立数据**`;
+
+// 生成多角色卡
+export async function generateMultiCharacterCard(
+  userPrompt: string,
+  settings: AppSettings,
+  theme: ThemeType = 'modern',
+  onProgress?: (module: string, progress: number) => void,
+  enableSearch: boolean = false,
+  wordCountSettings?: WordCountSettings
+): Promise<MultiCharacterGenerationResult> {
+  const shouldSearch = enableSearch && settings.enableSearch && PROVIDER_CONFIGS[settings.provider].supportsSearch;
+
+  // 检测多角色
+  const detectedCharacters = detectMultipleCharacters(userPrompt);
+  const isMultiCharacter = detectedCharacters.length >= 2;
+
+  if (!isMultiCharacter) {
+    // 单角色场景，使用旧的生成逻辑并转换
+    const result = await generateAllModules(
+      userPrompt,
+      settings,
+      theme,
+      onProgress,
+      enableSearch,
+      wordCountSettings
+    );
+
+    // 转换为 MultiCharacterCard 格式
+    const multiCard = convertToMultiCharacterCard(result.card as CharacterCard, theme);
+
+    return {
+      card: multiCard,
+      searchSources: result.searchSources,
+    };
+  }
+
+  // 多角色场景
+  onProgress?.('检测到多个角色，正在生成...', 5);
+
+  const systemPrompt = shouldSearch ? `${MULTI_CHARACTER_SYSTEM_PROMPT}\n\n如果需要了解角色的详细信息，请使用搜索工具。` : MULTI_CHARACTER_SYSTEM_PROMPT;
+
+  // 构建字数要求
+  const wordCountInstructions = wordCountSettings
+    ? `\n\n**【重要】字数要求**
+- 每个角色的 opening.sceneDescription: ${wordCountSettings.opening.min}-${wordCountSettings.opening.max}字
+- 每个角色的 miniTheater 每场景: ${wordCountSettings.miniTheater.min}-${wordCountSettings.miniTheater.max}字
+- outputSetting.replyLength: ${wordCountSettings.replyLength.min}-${wordCountSettings.replyLength.max}字`
+    : '';
+
+  const messages: Message[] = [
+    { role: 'system', content: systemPrompt },
+    {
+      role: 'user',
+      content: `请为以下多个角色生成完整的多人卡数据：
+
+用户描述：${userPrompt}
+
+检测到的角色：${detectedCharacters.join('、')}
+
+主题风格：${theme}
+${wordCountInstructions}
+
+【极其重要】请严格按照系统提示中的 JSON 格式返回数据。
+
+mainCharacters 数组必须包含 ${detectedCharacters.length} 个角色对象，每个角色对象必须包含以下完整模块：
+
+1. **characterInfo** - 完整的角色基本信息（name, gender, age, positioning, relationshipWithUser, coreValue, useCase, height, weight, zodiac, mbti, race, occupation）
+
+2. **persona** - 完整的人设（identity, appearance, voice, dressStyle, foodPreference, hobbies, personalities, personalityTags, emotionToUser, brief, backstory, lifeStory, quotes, interview, languageStyle, languageExamples, attitudeToUser, dialogueRequirements, boundaries）
+
+3. **adversityHandling** - 逆境处理（inappropriateRequest, insufficientInfo, emotionalAttack, beyondCapability）
+
+4. **sampleDialogue** - 样例对话（dialogue1User, dialogue1Response, dialogue2User, dialogue2Response, styleNotes）
+
+5. **miniTheater** - 小剧场3个场景（scene1Title, scene1Dialogue, scene1Action, scene2Title, scene2Dialogue, scene2Action, scene3Title, scene3Dialogue, scene3Action）
+
+请确保每个角色的每个字段都有具体内容，不要留空！`,
+    },
+  ];
+
+  if (shouldSearch) {
+    onProgress?.('正在搜索角色资料...', 10);
+  }
+
+  onProgress?.('正在生成多角色卡...', shouldSearch ? 30 : 20);
+
+  const response = await callAPIWithSearch(messages, settings, enableSearch, onProgress);
+
+  onProgress?.('正在解析结果...', 90);
+
+  const data = parseJSONResponse(response.content);
+
+  onProgress?.('完成', 100);
+
+  // 构建完整的 MultiCharacterCard
+  const multiCard = buildMultiCharacterCard(data, theme, wordCountSettings);
+
+  return {
+    card: multiCard,
+    searchSources: response.searchSources,
+  };
+}
+
+// 将旧版 CharacterCard 转换为 MultiCharacterCard
+function convertToMultiCharacterCard(
+  card: CharacterCard,
+  theme: ThemeType
+): MultiCharacterCard {
+  const baseCard = createEmptyMultiCharacterCard();
+
+  // 创建主角
+  const mainChar = createEmptyMainCharacter();
+  mainChar.isPrimaryFocus = true;
+  mainChar.displayOrder = 0;
+  mainChar.characterInfo = card.characterInfo;
+  mainChar.persona = card.persona;
+  mainChar.adversityHandling = card.adversityHandling;
+  mainChar.sampleDialogue = card.sampleDialogue;
+  mainChar.miniTheater = card.miniTheater;
+
+  return {
+    ...baseCard,
+    id: card.id || `multicard_${Date.now()}`,
+    createdAt: card.createdAt || Date.now(),
+    updatedAt: Date.now(),
+    cardName: card.characterInfo.name || '未命名角色',
+    cardType: 'single',
+    theme,
+    customTemplates: card.customTemplates,
+    plotSetting: card.plotSetting,
+    outputSetting: card.outputSetting,
+    opening: card.opening,
+    openingExtension: card.openingExtension,
+    mainCharacters: [mainChar],
+    secondaryCharacters: card.supportingCharacters?.map(s => ({
+      id: s.id,
+      name: s.name,
+      identity: s.identity,
+      appearance: s.appearance,
+      quote: s.quote,
+      relationToMain: s.relationToMain,
+    })) || [],
+    relationshipNetwork: {
+      relationships: [],
+      userRelationships: [{
+        characterId: mainChar.id,
+        labelFromUser: '',
+        labelToUser: card.characterInfo.relationshipWithUser,
+        relationshipType: card.characterInfo.relationshipWithUser,
+      }],
+    },
+  };
+}
+
+// 从 AI 响应构建 MultiCharacterCard
+function buildMultiCharacterCard(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  data: any,
+  theme: ThemeType,
+  wordCountSettings?: WordCountSettings
+): MultiCharacterCard {
+  const baseCard = createEmptyMultiCharacterCard();
+
+  // 处理主角列表
+  const mainCharacters: MainCharacter[] = (data.mainCharacters || []).map(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (char: any, index: number) => {
+      const baseChar = createEmptyMainCharacter();
+      return {
+        ...baseChar,
+        id: char.id || `char_${Date.now()}_${index}`,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        displayOrder: index,
+        isPrimaryFocus: char.isPrimaryFocus || index === 0,
+        characterInfo: {
+          ...baseChar.characterInfo,
+          ...char.characterInfo,
+        },
+        persona: {
+          ...baseChar.persona,
+          ...char.persona,
+          languageExamples: char.persona?.languageExamples || baseChar.persona.languageExamples,
+          lifeStory: char.persona?.lifeStory || baseChar.persona.lifeStory,
+        },
+        adversityHandling: {
+          ...baseChar.adversityHandling,
+          ...char.adversityHandling,
+        },
+        sampleDialogue: {
+          ...baseChar.sampleDialogue,
+          ...char.sampleDialogue,
+        },
+        miniTheater: {
+          ...baseChar.miniTheater,
+          ...char.miniTheater,
+          wordCountRange: wordCountSettings?.miniTheater || { min: 200, max: 400 },
+        },
+      };
+    }
+  );
+
+  // 如果没有主角，创建一个空的
+  if (mainCharacters.length === 0) {
+    const emptyChar = createEmptyMainCharacter();
+    emptyChar.isPrimaryFocus = true;
+    mainCharacters.push(emptyChar);
+  }
+
+  // 生成卡片名称
+  const cardName = data.cardName ||
+    mainCharacters.map(c => c.characterInfo.name).filter(n => n).join(' & ') ||
+    '未命名角色卡';
+
+  return {
+    ...baseCard,
+    id: `multicard_${Date.now()}`,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    cardName,
+    cardType: mainCharacters.length > 1 ? 'multi' : 'single',
+    theme,
+    plotSetting: {
+      ...baseCard.plotSetting,
+      ...data.plotSetting,
+    },
+    outputSetting: {
+      ...baseCard.outputSetting,
+      ...data.outputSetting,
+      replyLengthRange: wordCountSettings?.replyLength || { min: 200, max: 400 },
+    },
+    opening: {
+      ...baseCard.opening,
+      ...data.opening,
+      wordCountRange: wordCountSettings?.opening || { min: 300, max: 500 },
+    },
+    openingExtension: data.openingExtension || baseCard.openingExtension,
+    relationshipNetwork: {
+      relationships: data.relationshipNetwork?.relationships || [],
+      userRelationships: data.relationshipNetwork?.userRelationships || [],
+    },
+    mainCharacters,
+    secondaryCharacters: data.secondaryCharacters || [],
+  };
 }

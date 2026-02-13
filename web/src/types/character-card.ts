@@ -1,6 +1,12 @@
 // 主题类型
 export type ThemeType = 'ancient' | 'cyberpunk' | 'modern' | 'cozy' | 'custom';
 
+// 字数范围类型
+export interface WordCountRange {
+  min: number;
+  max: number;
+}
+
 // 主题名称映射
 export const THEME_NAMES: Record<ThemeType, string> = {
   ancient: '古风水墨',
@@ -37,6 +43,13 @@ export interface CharacterInfo {
   relationshipWithUser: string;
   coreValue: string;
   useCase: string;
+  // ===== 新增字段 =====
+  height?: string;               // 身高
+  weight?: string;               // 体重
+  zodiac?: string;               // 星座
+  mbti?: string;                 // MBTI
+  race?: string;                 // 种族
+  occupation?: string;           // 身份/职业
 }
 
 // 模块2: 人设
@@ -61,6 +74,15 @@ export interface Persona {
   attitudeToUser: string;
   dialogueRequirements: string;
   boundaries: string;
+  // ===== 新增字段 =====
+  personalityTags?: string[];    // 性格标签（如["大少爷脾气", "多动症儿童"]）
+  lifeStory?: {
+    childhood: string;           // 童年
+    growth: string;              // 成长
+    turning: string;             // 关键转折
+  };
+  quotes?: string[];             // 个性语录数组
+  interview?: string;            // 采访内容
 }
 
 // 模块3: 逆境处理
@@ -81,7 +103,8 @@ export interface PlotSetting {
 
 // 模块5: 输出设定
 export interface OutputSetting {
-  replyLength: string;
+  replyLength: string;              // 保持向后兼容
+  replyLengthRange?: WordCountRange; // 新增：结构化的字数范围
   languageStyle: string;
   perspective: string;
   actionFormat: string;
@@ -99,6 +122,7 @@ export interface SampleDialogue {
 
 // 模块7: 小剧场
 export interface MiniTheater {
+  wordCountRange?: WordCountRange;  // 字数范围设置
   scene1Title: string;
   scene1Dialogue: string;
   scene1Action: string;
@@ -112,6 +136,7 @@ export interface MiniTheater {
 
 // 模块8: 开场设计
 export interface Opening {
+  wordCountRange?: WordCountRange;  // 字数范围设置
   time: string;
   location: string;
   atmosphere: string;
@@ -121,6 +146,51 @@ export interface Opening {
   action: string;
   expression: string;
   innerThought: string;
+}
+
+// ===== 新增模块 =====
+
+// 模块9: 开场白扩展
+export interface OpeningExtension {
+  cardSummary: string;           // 角色卡总结语
+  relationshipSummary: {
+    characterLabel: string;      // 角色标签（如"假装被你催眠的芝麻馅汤圆他"）
+    userLabel: string;           // 用户标签（如"被暗恋不自知的你"）
+  };
+  worldBackgroundDetail?: string; // 世界背景详情（可选，多人卡/架空世界用）
+}
+
+// 模块10: 额外主角（用于多人卡）
+export interface AdditionalMainCharacter {
+  id: string;
+  name: string;
+  age: string;
+  height?: string;
+  weight?: string;
+  zodiac?: string;
+  mbti?: string;
+  identity: string;
+  race?: string;
+  appearance: string;
+  personalityTags?: string[];
+  personalityAnalysis?: string;
+  lifeStory?: {
+    childhood: string;
+    growth: string;
+    turning: string;
+  };
+  quotes?: string[];
+  relationToUser: string;
+}
+
+// 模块11: 副角色（精简版）
+export interface SupportingCharacter {
+  id: string;
+  name: string;
+  identity: string;              // 身份
+  appearance?: string;           // 简要外貌
+  quote: string;                 // 个性语
+  relationToMain: string;        // 与主角关系标签
 }
 
 // 完整角色卡
@@ -138,6 +208,10 @@ export interface CharacterCard {
   sampleDialogue: SampleDialogue;
   miniTheater: MiniTheater;
   opening: Opening;
+  // ===== 新增模块 =====
+  openingExtension?: OpeningExtension;
+  additionalMainCharacters?: AdditionalMainCharacter[];  // 最多3个
+  supportingCharacters?: SupportingCharacter[];          // 数量不限
 }
 
 // 模块元信息
@@ -157,6 +231,10 @@ export const MODULE_METAS: ModuleMeta[] = [
   { key: 'sampleDialogue', label: '样例对话', mufyField: '样例对话', wordCount: '300-500字' },
   { key: 'miniTheater', label: '小剧场', mufyField: '小剧场' },
   { key: 'opening', label: '开场设计', mufyField: '开场白', wordCount: '300-500字' },
+  // ===== 新增模块 =====
+  { key: 'openingExtension', label: '开场白扩展', mufyField: '开场白', wordCount: '50-150字' },
+  { key: 'additionalMainCharacters', label: '多主角', mufyField: '主人物简介', wordCount: '每人200-400字' },
+  { key: 'supportingCharacters', label: '副角色', mufyField: '副角色', wordCount: '每人50-100字' },
 ];
 
 // 创建空角色卡
@@ -174,6 +252,13 @@ export function createEmptyCard(): CharacterCard {
       relationshipWithUser: '',
       coreValue: '',
       useCase: '',
+      // 新增字段
+      height: '',
+      weight: '',
+      zodiac: '',
+      mbti: '',
+      race: '',
+      occupation: '',
     },
     persona: {
       identity: '',
@@ -191,6 +276,11 @@ export function createEmptyCard(): CharacterCard {
       attitudeToUser: '',
       dialogueRequirements: '',
       boundaries: '',
+      // 新增字段
+      personalityTags: [],
+      lifeStory: { childhood: '', growth: '', turning: '' },
+      quotes: [],
+      interview: '',
     },
     adversityHandling: {
       inappropriateRequest: '',
@@ -206,6 +296,7 @@ export function createEmptyCard(): CharacterCard {
     },
     outputSetting: {
       replyLength: '200-400字',
+      replyLengthRange: { min: 200, max: 400 },
       languageStyle: '',
       perspective: '第一人称',
       actionFormat: '使用 *动作* 格式',
@@ -219,6 +310,7 @@ export function createEmptyCard(): CharacterCard {
       styleNotes: '',
     },
     miniTheater: {
+      wordCountRange: { min: 200, max: 400 },
       scene1Title: '',
       scene1Dialogue: '',
       scene1Action: '',
@@ -230,6 +322,7 @@ export function createEmptyCard(): CharacterCard {
       scene3Action: '',
     },
     opening: {
+      wordCountRange: { min: 300, max: 500 },
       time: '',
       location: '',
       atmosphere: '',
@@ -240,5 +333,13 @@ export function createEmptyCard(): CharacterCard {
       expression: '',
       innerThought: '',
     },
+    // 新增模块
+    openingExtension: {
+      cardSummary: '',
+      relationshipSummary: { characterLabel: '', userLabel: '' },
+      worldBackgroundDetail: '',
+    },
+    additionalMainCharacters: [],
+    supportingCharacters: [],
   };
 }

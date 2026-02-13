@@ -59,7 +59,13 @@ export const MODULE_PROMPTS = {
 - positioning: 一句话角色定位
 - relationshipWithUser: 与用户的关系设定
 - coreValue: 这个角色能给用户带来什么
-- useCase: 适合的使用场景`,
+- useCase: 适合的使用场景
+- height: 身高（如：175cm）
+- weight: 体重（如：65kg）
+- zodiac: 星座
+- mbti: MBTI类型
+- race: 种族（如：人类/精灵/吸血鬼）
+- occupation: 身份/职业`,
 
   persona: `生成角色的详细人设，包括：
 - identity: 身份背景
@@ -69,9 +75,16 @@ export const MODULE_PROMPTS = {
 - foodPreference: 饮食偏好
 - hobbies: 兴趣爱好（3-5个）
 - personalities: 性格特点（列表格式，每条包含特点和说明）
+- personalityTags: 性格标签数组（2-4个简短标签，如["大少爷脾气", "傲娇", "闷骚"]）
 - emotionToUser: 对用户的情感态度
 - brief: 2-3句话的角色简介
 - backstory: 角色经历和背景故事
+- lifeStory: 人生经历对象，包含：
+  - childhood: 童年经历
+  - growth: 成长过程
+  - turning: 关键转折点
+- quotes: 个性语录数组（3-5条代表性台词）
+- interview: 采访内容（可选，模拟采访问答）
 - languageStyle: 语言风格描述
 - languageExamples: 不同情境下的台词示例（日常、开心、生气、撒娇）
 - attitudeToUser: 对用户的态度
@@ -121,6 +134,40 @@ export const MODULE_PROMPTS = {
 - action: 当前动作
 - expression: 神态表情
 - innerThought: 内心独白`,
+
+  openingExtension: `生成开场白扩展内容，增强用户对角色的第一印象：
+- cardSummary: 角色卡总结语（一句有趣的话概括角色特点，15-30字）
+- relationshipSummary: 角色和用户的关系总结
+  - characterLabel: 角色标签（如"假装被你催眠的芝麻馅汤圆他"）
+  - userLabel: 用户标签（如"被暗恋不自知的你"）
+- worldBackgroundDetail: 世界背景详情（仅多人卡/架空世界需要，可选）`,
+
+  additionalMainCharacters: `生成额外主角信息（用于多人卡场景，最多3个高频出现的主要角色）：
+每个主角包含：
+- id: 唯一标识
+- name: 姓名
+- age: 年龄
+- height: 身高
+- weight: 体重
+- zodiac: 星座
+- mbti: MBTI
+- identity: 身份/职业
+- race: 种族
+- appearance: 详细外貌描述
+- personalityTags: 性格标签数组
+- personalityAnalysis: 性格深度分析
+- lifeStory: { childhood, growth, turning } 人生经历
+- quotes: 个性语录数组
+- relationToUser: 与用户的关系`,
+
+  supportingCharacters: `生成副角色列表（出场有限的配角，只需精简信息）：
+每个副角色包含：
+- id: 唯一标识
+- name: 姓名
+- identity: 身份（如：经纪人/损友/助理）
+- appearance: 简要外貌描述
+- quote: 个性语（一句代表性的台词）
+- relationToMain: 与主角的关系标签`,
 };
 
 // 生成全部模块的提示词
@@ -135,7 +182,13 @@ export const GENERATE_ALL_PROMPT = `根据用户的描述，生成完整的 Mufy
     "positioning": "",
     "relationshipWithUser": "",
     "coreValue": "",
-    "useCase": ""
+    "useCase": "",
+    "height": "",
+    "weight": "",
+    "zodiac": "",
+    "mbti": "",
+    "race": "",
+    "occupation": ""
   },
   "persona": {
     "identity": "",
@@ -145,9 +198,17 @@ export const GENERATE_ALL_PROMPT = `根据用户的描述，生成完整的 Mufy
     "foodPreference": "",
     "hobbies": "",
     "personalities": "",
+    "personalityTags": [],
     "emotionToUser": "",
     "brief": "",
     "backstory": "",
+    "lifeStory": {
+      "childhood": "",
+      "growth": "",
+      "turning": ""
+    },
+    "quotes": [],
+    "interview": "",
     "languageStyle": "",
     "languageExamples": {
       "daily": "",
@@ -206,7 +267,19 @@ export const GENERATE_ALL_PROMPT = `根据用户的描述，生成完整的 Mufy
     "action": "",
     "expression": "",
     "innerThought": ""
+  },
+  "openingExtension": {
+    "cardSummary": "",
+    "relationshipSummary": {
+      "characterLabel": "",
+      "userLabel": ""
+    },
+    "worldBackgroundDetail": ""
   }
 }
 
-确保所有字段都有内容，保持角色一致性。`;
+注意：
+1. 确保所有字段都有内容，保持角色一致性
+2. personalityTags 和 quotes 是数组，请提供 2-4 个元素
+3. openingExtension.worldBackgroundDetail 是可选的，仅在多人卡或架空世界场景时需要填写
+4. additionalMainCharacters 和 supportingCharacters 需要根据用户需求单独生成`;

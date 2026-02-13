@@ -1,7 +1,8 @@
 import { Input } from '../../ui/Input';
 import { Textarea } from '../../ui/Textarea';
 import { Select } from '../../ui/Select';
-import { OutputSetting } from '../../../types/character-card';
+import { RangeSlider } from '../../ui/RangeSlider';
+import { OutputSetting, WordCountRange } from '../../../types/character-card';
 
 interface OutputSettingFormProps {
   data: OutputSetting;
@@ -18,17 +19,31 @@ export function OutputSettingForm({ data, onChange }: OutputSettingFormProps) {
     onChange({ ...data, [field]: value });
   };
 
+  const handleRangeChange = (range: WordCountRange) => {
+    onChange({
+      ...data,
+      replyLengthRange: range,
+      replyLength: `${range.min}-${range.max}字`, // 同步更新字符串格式
+    });
+  };
+
+  // 获取当前范围值，如果没有则使用默认值
+  const currentRange = data.replyLengthRange || { min: 200, max: 400 };
+
   return (
     <div className="space-y-4">
       <div className="p-3 bg-blue-50 rounded-lg border border-blue-100 text-sm text-blue-700 mb-4">
         输出设定定义了角色回复的格式和结构，系统会自动添加对应主题的 HTML 模板
       </div>
 
-      <Input
+      <RangeSlider
         label="回复长度"
-        placeholder="例：200-400字"
-        value={data.replyLength}
-        onChange={(e) => update('replyLength', e.target.value)}
+        min={50}
+        max={1000}
+        step={50}
+        value={currentRange}
+        onChange={handleRangeChange}
+        unit="字"
       />
 
       <Textarea

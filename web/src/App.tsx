@@ -2,12 +2,12 @@ import { useState } from 'react';
 import { MainLayout } from './components/layout/MainLayout';
 import { Header } from './components/layout/Header';
 import { Sidebar } from './components/layout/Sidebar';
-import { ModuleEditor } from './components/editor/ModuleEditor';
+import { MultiCharacterEditor } from './components/editor/MultiCharacterEditor';
 import { SettingsModal } from './components/settings/SettingsModal';
 import { AIGenerateModal } from './components/ai-generate/AIGenerateModal';
 import { Toast, useToast } from './components/ui/Toast';
-import { useCharacterStore } from './store/useCharacterStore';
-import { ThemeType, CharacterCard } from './types/character-card';
+import { useMultiCharacterStore } from './store/useMultiCharacterStore';
+import { ThemeType, MultiCharacterCard, MainCharacter } from './types/multi-character-card';
 import { FileText, Wand2 } from 'lucide-react';
 
 function App() {
@@ -17,6 +17,8 @@ function App() {
   const {
     cards,
     activeCardId,
+    activeCharacterId,
+    activeContext,
     createCard,
     deleteCard,
     duplicateCard,
@@ -24,7 +26,13 @@ function App() {
     updateCard,
     updateTheme,
     getActiveCard,
-  } = useCharacterStore();
+    addMainCharacter,
+    removeMainCharacter,
+    updateMainCharacter,
+    setActiveCharacter,
+    setActiveContext,
+    setPrimaryCharacter,
+  } = useMultiCharacterStore();
 
   const activeCard = getActiveCard();
   const { toast, showToast, hideToast } = useToast();
@@ -35,9 +43,48 @@ function App() {
     }
   };
 
-  const handleUpdateCard = (updates: Partial<CharacterCard>) => {
+  const handleUpdateCard = (updates: Partial<MultiCharacterCard>) => {
     if (activeCardId) {
       updateCard(activeCardId, updates);
+    }
+  };
+
+  const handleUpdateCharacter = (characterId: string, updates: Partial<MainCharacter>) => {
+    if (activeCardId) {
+      updateMainCharacter(activeCardId, characterId, updates);
+    }
+  };
+
+  const handleAddCharacter = () => {
+    if (activeCardId) {
+      const newCharId = addMainCharacter(activeCardId);
+      showToast('已添加新角色', 'success');
+      setActiveCharacter(newCharId);
+    }
+  };
+
+  const handleRemoveCharacter = (characterId: string) => {
+    if (activeCardId) {
+      if (confirm('确定要删除这个角色吗？')) {
+        removeMainCharacter(activeCardId, characterId);
+        showToast('已删除角色', 'info');
+      }
+    }
+  };
+
+  const handleSelectCharacter = (characterId: string | null) => {
+    setActiveCharacter(characterId);
+  };
+
+  const handleSelectGlobal = () => {
+    setActiveContext('global');
+    setActiveCharacter(null);
+  };
+
+  const handleSetPrimary = (characterId: string) => {
+    if (activeCardId) {
+      setPrimaryCharacter(activeCardId, characterId);
+      showToast('已设为焦点角色', 'success');
     }
   };
 
@@ -93,9 +140,17 @@ function App() {
         }
       >
         {activeCard ? (
-          <ModuleEditor
+          <MultiCharacterEditor
             card={activeCard}
-            onUpdate={handleUpdateCard}
+            activeCharacterId={activeCharacterId}
+            activeContext={activeContext}
+            onUpdateCard={handleUpdateCard}
+            onUpdateCharacter={handleUpdateCharacter}
+            onAddCharacter={handleAddCharacter}
+            onRemoveCharacter={handleRemoveCharacter}
+            onSelectCharacter={handleSelectCharacter}
+            onSelectGlobal={handleSelectGlobal}
+            onSetPrimary={handleSetPrimary}
           />
         ) : (
           <div className="h-full flex flex-col items-center justify-center text-gray-400">

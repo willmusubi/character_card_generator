@@ -1,13 +1,26 @@
 import { useState } from 'react';
-import { X, Wand2, Loader2, AlertCircle, Settings, Search } from 'lucide-react';
+import { X, Wand2, Loader2, AlertCircle, Settings, Search, ChevronDown, ChevronUp, Users } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Textarea } from '../ui/Textarea';
 import { Select } from '../ui/Select';
+import { RangeSlider } from '../ui/RangeSlider';
 import { useSettingsStore } from '../../store/useSettingsStore';
-import { useCharacterStore } from '../../store/useCharacterStore';
-import { ThemeType, THEME_NAMES, CharacterCard } from '../../types/character-card';
+import { useMultiCharacterStore } from '../../store/useMultiCharacterStore';
+import { ThemeType, THEME_NAMES, WordCountRange } from '../../types/character-card';
+import { MultiCharacterCard } from '../../types/multi-character-card';
 import { PROVIDER_CONFIGS } from '../../types/settings';
-import { generateAllModules, generateBasicModules, generateRemainingModules, generateCustomStyle } from '../../utils/ai-generator';
+import {
+  generateMultiCharacterCard,
+  generateCustomStyle,
+  detectMultipleCharacters,
+} from '../../utils/ai-generator';
+
+// 字数范围参数
+interface WordCountSettings {
+  replyLength: WordCountRange;
+  opening: WordCountRange;
+  miniTheater: WordCountRange;
+}
 
 interface AIGenerateModalProps {
   isOpen: boolean;
@@ -15,8 +28,7 @@ interface AIGenerateModalProps {
   onComplete: (cardId: string) => void;
 }
 
-type GenerationMode = 'all' | 'step';
-type GenerationStep = 'input' | 'generating' | 'basic-done' | 'error';
+type GenerationStep = 'input' | 'generating' | 'error';
 
 const themeOptions = [
   { value: 'auto', label: '自动匹配' },
@@ -25,18 +37,21 @@ const themeOptions = [
 
 export function AIGenerateModal({ isOpen, onClose, onComplete }: AIGenerateModalProps) {
   const { settings, isConfigured } = useSettingsStore();
-  const { createCard, updateCard } = useCharacterStore();
 
   const [prompt, setPrompt] = useState('');
   const [theme, setTheme] = useState<string>('auto');
-  const [mode, setMode] = useState<GenerationMode>('all');
   const [step, setStep] = useState<GenerationStep>('input');
   const [progress, setProgress] = useState(0);
   const [progressText, setProgressText] = useState('');
   const [error, setError] = useState('');
-  const [currentCardId, setCurrentCardId] = useState<string | null>(null);
-  const [partialCard, setPartialCard] = useState<Partial<CharacterCard> | null>(null);
   const [enableSearch, setEnableSearch] = useState(true);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [detectedCharacters, setDetectedCharacters] = useState<string[]>([]);
+  const [wordCountSettings, setWordCountSettings] = useState<WordCountSettings>({
+    replyLength: { min: 200, max: 400 },
+    opening: { min: 300, max: 500 },
+    miniTheater: { min: 200, max: 400 },
+  });
 
   // 检查当前提供商是否支持搜索
   const supportsSearch = PROVIDER_CONFIGS[settings.provider].supportsSearch;
@@ -64,7 +79,7 @@ export function AIGenerateModal({ isOpen, onClose, onComplete }: AIGenerateModal
     return 'modern';
   };
 
-  const handleGenerateAll = async () => {
+  const handleGenerate = async () => {
     if (!prompt.trim()) return;
 
     setStep('generating');
@@ -77,12 +92,14 @@ export function AIGenerateModal({ isOpen, onClose, onComplete }: AIGenerateModal
         ? 'custom'
         : (theme === 'auto' ? detectTheme(prompt) : theme as ThemeType);
 
-      const result = await generateAllModules(
+      // 使用新的多角色生成函数
+      const result = await generateMultiCharacterCard(
         prompt,
         settings,
         selectedTheme,
         handleProgress,
-        enableSearch && supportsSearch
+        enableSearch && supportsSearch,
+        wordCountSettings
       );
 
       // 记录搜索来源（用于调试）
@@ -92,93 +109,38 @@ export function AIGenerateModal({ isOpen, onClose, onComplete }: AIGenerateModal
 
       // 如果是自定义主题，生成独特的风格模板
       let customTemplates;
-      if (isCustomTheme && result.card.characterInfo) {
+      const primaryChar = result.card.mainCharacters[0];
+      if (isCustomTheme && primaryChar) {
         handleProgress('正在生成专属风格...', 85);
         customTemplates = await generateCustomStyle(
           {
-            name: result.card.characterInfo.name || '角色',
-            positioning: result.card.characterInfo.positioning || '',
+            name: primaryChar.characterInfo.name || '角色',
+            positioning: primaryChar.characterInfo.positioning || '',
             worldBackground: result.card.plotSetting?.worldBackground,
-            personality: result.card.persona?.personalities,
+            personality: primaryChar.persona?.personalities,
           },
           settings
         );
         console.log('[AI Generate] 生成的自定义风格:', customTemplates.styleName);
       }
 
-      // 创建新卡片并填充数据
-      const newCardId = createCard();
-      updateCard(newCardId, {
+      // 直接添加生成的卡片到 store
+      const newCard: MultiCharacterCard = {
         ...result.card,
         customTemplates,
-      });
+      };
 
-      onComplete(newCardId);
+      useMultiCharacterStore.setState((state) => ({
+        cards: [...state.cards, newCard],
+        activeCardId: newCard.id,
+        activeCharacterId: newCard.mainCharacters[0]?.id || null,
+        activeContext: 'character',
+      }));
+
+      onComplete(newCard.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : '生成失败，请重试');
       setStep('error');
-    }
-  };
-
-  const handleGenerateBasic = async () => {
-    if (!prompt.trim()) return;
-
-    setStep('generating');
-    setError('');
-
-    try {
-      const selectedTheme = theme === 'auto' ? detectTheme(prompt) : theme as ThemeType;
-
-      setProgressText('正在生成基础信息...');
-      setProgress(30);
-
-      const cardData = await generateBasicModules(prompt, settings, selectedTheme);
-
-      // 创建新卡片
-      const newCardId = createCard();
-      updateCard(newCardId, cardData);
-
-      setCurrentCardId(newCardId);
-      setPartialCard(cardData);
-      setStep('basic-done');
-      setProgress(100);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '生成失败，请重试');
-      setStep('error');
-    }
-  };
-
-  const handleContinueGeneration = async () => {
-    if (!currentCardId || !partialCard) return;
-
-    setStep('generating');
-    setError('');
-
-    try {
-      setProgressText('正在生成剩余模块...');
-      setProgress(50);
-
-      const remainingData = await generateRemainingModules(
-        prompt,
-        partialCard,
-        ['adversityHandling', 'plotSetting', 'outputSetting', 'sampleDialogue', 'miniTheater', 'opening'],
-        settings
-      );
-
-      updateCard(currentCardId, remainingData);
-
-      onComplete(currentCardId);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '生成失败，请重试');
-      setStep('error');
-    }
-  };
-
-  const handleStartGenerate = () => {
-    if (mode === 'all') {
-      handleGenerateAll();
-    } else {
-      handleGenerateBasic();
     }
   };
 
@@ -194,8 +156,7 @@ export function AIGenerateModal({ isOpen, onClose, onComplete }: AIGenerateModal
     setTheme('auto');
     setError('');
     setProgress(0);
-    setCurrentCardId(null);
-    setPartialCard(null);
+    setDetectedCharacters([]);
     onClose();
   };
 
@@ -252,51 +213,44 @@ export function AIGenerateModal({ isOpen, onClose, onComplete }: AIGenerateModal
             <>
               <Textarea
                 label="请描述你想创建的角色"
-                placeholder="例如：一个温柔善良的古代才女，擅长诗词歌赋，性格温婉但内心坚强...&#10;&#10;你也可以直接粘贴角色的资料或设定。"
+                placeholder="例如：一个温柔善良的古代才女，擅长诗词歌赋，性格温婉但内心坚强...&#10;&#10;你也可以输入多个角色，如：最终幻想的蒂法和爱丽丝"
                 value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setPrompt(value);
+                  // 检测多角色
+                  const detected = detectMultipleCharacters(value);
+                  setDetectedCharacters(detected);
+                }}
                 rows={6}
                 className="mb-4"
               />
 
-              <div className="grid grid-cols-2 gap-4 mb-4">
+              {/* 多角色检测提示 */}
+              {detectedCharacters.length >= 2 && (
+                <div className="flex items-center gap-2 p-3 mb-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <Users className="w-5 h-5 text-blue-600" />
+                  <div>
+                    <p className="text-sm font-medium text-blue-800">
+                      检测到 {detectedCharacters.length} 个角色
+                    </p>
+                    <p className="text-xs text-blue-600">
+                      {detectedCharacters.join('、')} - 将生成多人卡，每个角色独立拥有完整数据
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <div className="mb-4">
                 <Select
                   label="主题风格"
                   options={themeOptions}
                   value={theme}
                   onChange={setTheme}
                 />
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    生成方式
-                  </label>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setMode('all')}
-                      className={`flex-1 py-2 px-3 text-sm rounded-lg border transition-colors ${
-                        mode === 'all'
-                          ? 'bg-blue-50 border-blue-300 text-blue-700'
-                          : 'border-gray-300 text-gray-600 hover:bg-gray-50'
-                      }`}
-                    >
-                      一键生成
-                    </button>
-                    <button
-                      onClick={() => setMode('step')}
-                      className={`flex-1 py-2 px-3 text-sm rounded-lg border transition-colors ${
-                        mode === 'step'
-                          ? 'bg-blue-50 border-blue-300 text-blue-700'
-                          : 'border-gray-300 text-gray-600 hover:bg-gray-50'
-                      }`}
-                    >
-                      分步生成
-                    </button>
-                  </div>
-                </div>
               </div>
 
-              {/* 搜索增强选项（仅 Gemini 支持） */}
+              {/* 搜索增强选项（仅支持搜索的提供商） */}
               {supportsSearch && (
                 <label className="flex items-center gap-2 mb-4 cursor-pointer">
                   <input
@@ -313,10 +267,52 @@ export function AIGenerateModal({ isOpen, onClose, onComplete }: AIGenerateModal
                 </label>
               )}
 
+              {/* 高级设置：字数范围 */}
+              <div className="mb-4">
+                <button
+                  type="button"
+                  onClick={() => setShowAdvanced(!showAdvanced)}
+                  className="flex items-center gap-1 text-sm text-gray-600 hover:text-gray-800"
+                >
+                  {showAdvanced ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  高级设置：字数范围
+                </button>
+
+                {showAdvanced && (
+                  <div className="mt-3 p-4 bg-gray-50 rounded-lg space-y-4">
+                    <RangeSlider
+                      label="回复长度"
+                      min={50}
+                      max={1000}
+                      step={50}
+                      value={wordCountSettings.replyLength}
+                      onChange={(range) => setWordCountSettings(prev => ({ ...prev, replyLength: range }))}
+                      unit="字"
+                    />
+                    <RangeSlider
+                      label="开场设计字数"
+                      min={100}
+                      max={800}
+                      step={50}
+                      value={wordCountSettings.opening}
+                      onChange={(range) => setWordCountSettings(prev => ({ ...prev, opening: range }))}
+                      unit="字"
+                    />
+                    <RangeSlider
+                      label="小剧场每场景字数"
+                      min={50}
+                      max={600}
+                      step={50}
+                      value={wordCountSettings.miniTheater}
+                      onChange={(range) => setWordCountSettings(prev => ({ ...prev, miniTheater: range }))}
+                      unit="字"
+                    />
+                  </div>
+                )}
+              </div>
+
               <p className="text-xs text-gray-500 mb-4">
-                {mode === 'all'
-                  ? '一次性生成所有 8 个模块，适合快速创建'
-                  : '先生成基础信息，可编辑后再继续生成其他模块'}
+                一次性生成所有模块，适合快速创建
                 {enableSearch && supportsSearch && (
                   <span className="block mt-1 text-blue-600">
                     已启用搜索：将自动搜索角色的官方资料，避免编造信息
@@ -340,35 +336,6 @@ export function AIGenerateModal({ isOpen, onClose, onComplete }: AIGenerateModal
             </div>
           )}
 
-          {/* 基础模块完成 */}
-          {step === 'basic-done' && (
-            <div className="py-4">
-              <div className="flex items-center gap-2 text-green-600 mb-4">
-                <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center">
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                </div>
-                <span className="font-medium">基础信息已生成</span>
-              </div>
-
-              <div className="bg-gray-50 rounded-lg p-4 mb-4">
-                <p className="text-sm text-gray-700">
-                  <strong>角色名称：</strong>
-                  {partialCard?.characterInfo?.name || '未命名'}
-                </p>
-                <p className="text-sm text-gray-700 mt-2">
-                  <strong>定位：</strong>
-                  {partialCard?.characterInfo?.positioning || '暂无'}
-                </p>
-              </div>
-
-              <p className="text-sm text-gray-600 mb-4">
-                你可以先查看并编辑基础信息，然后继续生成剩余模块。
-              </p>
-            </div>
-          )}
-
           {/* 错误状态 */}
           {step === 'error' && (
             <div className="py-4">
@@ -389,7 +356,7 @@ export function AIGenerateModal({ isOpen, onClose, onComplete }: AIGenerateModal
                 取消
               </Button>
               <Button
-                onClick={handleStartGenerate}
+                onClick={handleGenerate}
                 disabled={!prompt.trim()}
                 className="gap-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
               >
@@ -403,25 +370,6 @@ export function AIGenerateModal({ isOpen, onClose, onComplete }: AIGenerateModal
             <Button variant="secondary" onClick={handleClose}>
               取消
             </Button>
-          )}
-
-          {step === 'basic-done' && (
-            <>
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  if (currentCardId) {
-                    onComplete(currentCardId);
-                  }
-                }}
-              >
-                先编辑基础信息
-              </Button>
-              <Button onClick={handleContinueGeneration} className="gap-2">
-                <Wand2 className="w-4 h-4" />
-                继续生成
-              </Button>
-            </>
           )}
 
           {step === 'error' && (

@@ -56,6 +56,11 @@ async function proxyRequest(targetUrl, req, res, useVPN = true) {
 
     console.log(`[Proxy] Response status: ${response.status}`);
 
+    // 如果是错误响应，打印详细信息
+    if (response.status >= 400) {
+      console.error(`[Proxy] Error response body:`, data.substring(0, 500));
+    }
+
     // 转发响应
     res.status(response.status);
     res.set('Content-Type', response.headers.get('content-type') || 'application/json');

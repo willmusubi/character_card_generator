@@ -1,6 +1,7 @@
 import { Input } from '../../ui/Input';
 import { Textarea } from '../../ui/Textarea';
-import { Opening } from '../../../types/character-card';
+import { RangeSlider } from '../../ui/RangeSlider';
+import { Opening, WordCountRange } from '../../../types/character-card';
 
 interface OpeningFormProps {
   data: Opening;
@@ -12,11 +13,28 @@ export function OpeningForm({ data, onChange }: OpeningFormProps) {
     onChange({ ...data, [field]: value });
   };
 
+  const handleRangeChange = (range: WordCountRange) => {
+    onChange({ ...data, wordCountRange: range });
+  };
+
+  // 获取当前范围值，如果没有则使用默认值
+  const currentRange = data.wordCountRange || { min: 300, max: 500 };
+
   return (
     <div className="space-y-4">
       <div className="p-3 bg-green-50 rounded-lg border border-green-100 text-sm text-green-700 mb-4">
         开场设计是用户看到的第一印象，包含场景信息、正文和角色状态栏
       </div>
+
+      <RangeSlider
+        label="开场字数范围"
+        min={100}
+        max={800}
+        step={50}
+        value={currentRange}
+        onChange={handleRangeChange}
+        unit="字"
+      />
 
       <div className="border rounded-lg p-4 space-y-3">
         <h4 className="text-sm font-medium text-gray-700">场景信息</h4>

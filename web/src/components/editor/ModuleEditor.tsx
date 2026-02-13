@@ -13,6 +13,9 @@ import { OutputSettingForm } from './forms/OutputSettingForm';
 import { SampleDialogueForm } from './forms/SampleDialogueForm';
 import { MiniTheaterForm } from './forms/MiniTheaterForm';
 import { OpeningForm } from './forms/OpeningForm';
+import { OpeningExtensionForm } from './forms/OpeningExtensionForm';
+import { AdditionalMainCharactersForm } from './forms/AdditionalMainCharactersForm';
+import { SupportingCharactersForm } from './forms/SupportingCharactersForm';
 
 interface ModuleEditorProps {
   card: CharacterCard;
@@ -50,6 +53,28 @@ export function ModuleEditor({ card, onUpdate }: ModuleEditorProps) {
         return <MiniTheaterForm data={card.miniTheater} onChange={(data) => onUpdate({ miniTheater: data })} />;
       case 'opening':
         return <OpeningForm data={card.opening} onChange={(data) => onUpdate({ opening: data })} />;
+      // 新增模块
+      case 'openingExtension':
+        return (
+          <OpeningExtensionForm
+            data={card.openingExtension || { cardSummary: '', relationshipSummary: { characterLabel: '', userLabel: '' } }}
+            onChange={(data) => onUpdate({ openingExtension: data })}
+          />
+        );
+      case 'additionalMainCharacters':
+        return (
+          <AdditionalMainCharactersForm
+            data={card.additionalMainCharacters || []}
+            onChange={(data) => onUpdate({ additionalMainCharacters: data })}
+          />
+        );
+      case 'supportingCharacters':
+        return (
+          <SupportingCharactersForm
+            data={card.supportingCharacters || []}
+            onChange={(data) => onUpdate({ supportingCharacters: data })}
+          />
+        );
       default:
         return null;
     }
