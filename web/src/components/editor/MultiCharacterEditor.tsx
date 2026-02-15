@@ -133,6 +133,7 @@ function buildLegacyCard(
     },
     opening: card.opening,
     openingExtension: card.openingExtension,
+    outputModules: card.outputModules,
     // 多角色相关
     additionalMainCharacters: card.mainCharacters
       .filter((c) => c.id !== char?.id)
@@ -338,6 +339,7 @@ export function MultiCharacterEditor({
           <RelationshipNetworkForm
             data={card.relationshipNetwork}
             characters={card.mainCharacters}
+            secondaryCharacters={card.secondaryCharacters}
             onChange={(data) => onUpdateCard({ relationshipNetwork: data })}
           />
         );

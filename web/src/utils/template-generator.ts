@@ -425,6 +425,74 @@ export function generateSupportingCharactersOutput(card: CharacterCard): string 
   return output;
 }
 
+// 生成输出模块输出
+export function generateOutputModulesOutput(card: CharacterCard): string {
+  const { outputModules, characterInfo } = card;
+  if (!outputModules) {
+    return '暂无输出模块设定';
+  }
+
+  const name = characterInfo?.name || '{{char}}';
+  let output = `### 输出模块设定\n`;
+
+  // 角色状态栏
+  output += `\n#### 角色状态栏（每次回复必须输出）\n`;
+  const status = outputModules.characterStatus;
+  if (status) {
+    output += `\n**当前穿搭**：${status.attire || '[穿着描述]'}`;
+    output += `\n**当前动作**：${status.action || '[动作描述]'}`;
+    output += `\n**神态表情**：${status.expression || '[表情描述]'}`;
+    output += `\n**好感度**：${status.affection || '50/100'}`;
+    output += `\n**与{{user}}关系**：${status.relationship || '[关系状态]'}`;
+    output += `\n**内心独白**：${status.innerOS || '[内心想法]'}`;
+
+    if (status.todoList && status.todoList.length > 0) {
+      output += `\n\n**${name}的待办事项**：`;
+      status.todoList.forEach((todo, i) => {
+        if (todo) output += `\n${i + 1}. ${todo}`;
+      });
+    }
+
+    if (status.randomContent) {
+      output += `\n\n**随机内容（梦境/回忆/备忘录）**：\n${status.randomContent}`;
+    }
+  }
+
+  // 记忆区
+  output += `\n\n#### 记忆区\n`;
+  const memory = outputModules.memoryArea;
+  if (memory) {
+    if (memory.hotSearch && memory.hotSearch.length > 0) {
+      output += `\n**微博热搜**：`;
+      memory.hotSearch.forEach((item, i) => {
+        if (item) output += `\n${i + 1}. ${item}`;
+      });
+    }
+
+    if (memory.shortTermMemory) {
+      output += `\n\n**短期记忆**：${memory.shortTermMemory}`;
+    }
+
+    if (memory.longTermMemory) {
+      output += `\n\n**长期记忆**：${memory.longTermMemory}`;
+    }
+
+    if (memory.danmaku && memory.danmaku.length > 0) {
+      output += `\n\n**弹幕/粉丝评论**：`;
+      memory.danmaku.forEach((item) => {
+        if (item) output += `\n- ${item}`;
+      });
+    }
+  }
+
+  // 可选模块状态
+  output += `\n\n#### 可选模块`;
+  output += `\n- 手机界面：${outputModules.enablePhoneInterface ? '✅ 已启用' : '❌ 未启用'}`;
+  output += `\n- 音乐播放器：${outputModules.enableMusicPlayer ? '✅ 已启用' : '❌ 未启用'}`;
+
+  return output;
+}
+
 // 获取模块输出
 export function getModuleOutput(card: CharacterCard, moduleKey: string): string {
   switch (moduleKey) {
@@ -438,6 +506,8 @@ export function getModuleOutput(card: CharacterCard, moduleKey: string): string 
       return generatePlotSettingOutput(card);
     case 'outputSetting':
       return generateOutputSettingOutput(card);
+    case 'outputModules':
+      return generateOutputModulesOutput(card);
     case 'sampleDialogue':
       return generateSampleDialogueOutput(card);
     case 'miniTheater':
@@ -463,6 +533,7 @@ export function getAllModulesOutput(card: CharacterCard): Record<string, string>
     adversityHandling: generateAdversityOutput(card),
     plotSetting: generatePlotSettingOutput(card),
     outputSetting: generateOutputSettingOutput(card),
+    outputModules: generateOutputModulesOutput(card),
     sampleDialogue: generateSampleDialogueOutput(card),
     miniTheater: generateMiniTheaterOutput(card),
     opening: generateOpeningOutput(card),

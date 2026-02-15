@@ -185,6 +185,8 @@ function App() {
       <AIGenerateModal
         isOpen={showAIGenerate}
         onClose={() => setShowAIGenerate(false)}
+        onOpen={() => setShowAIGenerate(true)}
+        onOpenSettings={handleOpenSettings}
         onComplete={handleAIGenerateComplete}
       />
 

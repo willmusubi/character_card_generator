@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { X, Wand2, Loader2, AlertCircle, Settings, Search, ChevronDown, ChevronUp, Users } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { X, Wand2, Loader2, AlertCircle, Settings, Search, ChevronDown, ChevronUp, Users, CheckCircle } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Textarea } from '../ui/Textarea';
 import { Select } from '../ui/Select';
@@ -11,37 +11,48 @@ import { MultiCharacterCard } from '../../types/multi-character-card';
 import { PROVIDER_CONFIGS } from '../../types/settings';
 import {
   generateMultiCharacterCard,
+  generateMultiCharacterCardDemo,
   generateCustomStyle,
   detectMultipleCharacters,
 } from '../../utils/ai-generator';
+import { FloatingProgress, GenerationStatus } from './FloatingProgress';
 
-// 字数范围参数
+// 角色卡详细程度选项
+type DetailLevel = 'concise' | 'standard' | 'detailed';
+
+// 简化的字数设置
 interface WordCountSettings {
-  replyLength: WordCountRange;
-  opening: WordCountRange;
-  miniTheater: WordCountRange;
+  replyLength: WordCountRange;  // 聊天输出字数（发给 Mufy/酒馆）
+  detailLevel: DetailLevel;     // 角色卡详细程度
 }
 
 interface AIGenerateModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onOpen: () => void;  // 用于从悬浮框展开时重新打开模态框
+  onOpenSettings: () => void;  // 打开设置弹框
   onComplete: (cardId: string) => void;
 }
 
-type GenerationStep = 'input' | 'generating' | 'error';
+type GenerationStep = 'input' | 'generating' | 'success' | 'error';
 
 const themeOptions = [
   { value: 'auto', label: '自动匹配' },
   ...Object.entries(THEME_NAMES).map(([value, label]) => ({ value, label })),
 ];
 
-export function AIGenerateModal({ isOpen, onClose, onComplete }: AIGenerateModalProps) {
-  const { settings, isConfigured } = useSettingsStore();
+export function AIGenerateModal({ isOpen, onClose, onOpen, onOpenSettings, onComplete }: AIGenerateModalProps) {
+  const { settings, isConfigured, demoMode, inviteCode } = useSettingsStore();
+  const [showInviteCodeInput, setShowInviteCodeInput] = useState(false);
+  const [inviteCodeInput, setInviteCodeInput] = useState('');
+  const [inviteCodeError, setInviteCodeError] = useState('');
+  const [verifyingCode, setVerifyingCode] = useState(false);
 
   const [prompt, setPrompt] = useState('');
   const [theme, setTheme] = useState<string>('auto');
   const [step, setStep] = useState<GenerationStep>('input');
   const [progress, setProgress] = useState(0);
+  const [displayProgress, setDisplayProgress] = useState(0); // 显示用的平滑进度
   const [progressText, setProgressText] = useState('');
   const [error, setError] = useState('');
   const [enableSearch, setEnableSearch] = useState(true);
@@ -49,14 +60,103 @@ export function AIGenerateModal({ isOpen, onClose, onComplete }: AIGenerateModal
   const [detectedCharacters, setDetectedCharacters] = useState<string[]>([]);
   const [wordCountSettings, setWordCountSettings] = useState<WordCountSettings>({
     replyLength: { min: 200, max: 400 },
-    opening: { min: 300, max: 500 },
-    miniTheater: { min: 200, max: 400 },
+    detailLevel: 'standard',
   });
+  const [isMinimized, setIsMinimized] = useState(false); // 最小化到悬浮框
+  const [floatingStatus, setFloatingStatus] = useState<GenerationStatus>('idle');
+  const [generatedCardId, setGeneratedCardId] = useState<string | null>(null); // 生成完成的卡片ID
+  const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // 检查当前提供商是否支持搜索
   const supportsSearch = PROVIDER_CONFIGS[settings.provider].supportsSearch;
 
-  if (!isOpen) return null;
+  // 平滑进度动画效果
+  useEffect(() => {
+    if (step !== 'generating') {
+      setDisplayProgress(0);
+      return;
+    }
+
+    // 清理之前的定时器
+    if (progressIntervalRef.current) {
+      clearInterval(progressIntervalRef.current);
+    }
+
+    // 模拟进度增长（当实际进度停滞时）
+    progressIntervalRef.current = setInterval(() => {
+      setDisplayProgress(prev => {
+        // 如果实际进度已经超过显示进度，跳到实际进度
+        if (progress > prev) {
+          return progress;
+        }
+        // 否则缓慢增长，但不超过目标进度的90%（留空间给真实进度）
+        const targetCap = Math.min(progress + 15, 85); // 最多比实际进度多15%，但不超过85%
+        if (prev < targetCap) {
+          // 越接近目标，增长越慢
+          const increment = Math.max(0.3, (targetCap - prev) * 0.02);
+          return Math.min(prev + increment, targetCap);
+        }
+        return prev;
+      });
+    }, 200);
+
+    return () => {
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+      }
+    };
+  }, [step, progress]);
+
+  // 当实际进度更新时，确保显示进度跟上
+  useEffect(() => {
+    if (progress > displayProgress) {
+      setDisplayProgress(progress);
+    }
+  }, [progress, displayProgress]);
+
+  // 从悬浮框展开 - 必须在条件返回之前定义
+  const handleExpand = useCallback(() => {
+    setIsMinimized(false);
+    onOpen();
+  }, [onOpen]);
+
+  // 关闭悬浮框 - 必须在条件返回之前定义
+  const handleDismissFloating = useCallback(() => {
+    setFloatingStatus('idle');
+    setIsMinimized(false);
+    setStep('input');
+    setPrompt('');
+    setTheme('auto');
+    setError('');
+    setProgress(0);
+    setDisplayProgress(0);
+    setDetectedCharacters([]);
+  }, []);
+
+  // 最小化到悬浮框 - 必须在条件返回之前定义
+  const handleMinimize = useCallback(() => {
+    setIsMinimized(true);
+    setFloatingStatus('generating');
+    onClose();
+  }, [onClose]);
+
+  // 如果模态框关闭但有悬浮进度，只渲染悬浮框
+  if (!isOpen) {
+    if (isMinimized && floatingStatus !== 'idle') {
+      return (
+        <FloatingProgress
+          isVisible={true}
+          status={floatingStatus}
+          progress={displayProgress}
+          progressText={progressText}
+          error={error}
+          onExpand={handleExpand}
+          onDismiss={handleDismissFloating}
+        />
+      );
+    }
+    return null;
+  }
 
   const handleProgress = (text: string, value: number) => {
     setProgressText(text);
@@ -92,25 +192,41 @@ export function AIGenerateModal({ isOpen, onClose, onComplete }: AIGenerateModal
         ? 'custom'
         : (theme === 'auto' ? detectTheme(prompt) : theme as ThemeType);
 
-      // 使用新的多角色生成函数
-      const result = await generateMultiCharacterCard(
-        prompt,
-        settings,
-        selectedTheme,
-        handleProgress,
-        enableSearch && supportsSearch,
-        wordCountSettings
-      );
+      let result;
+
+      // 根据是否为 Demo 模式选择不同的生成方式
+      if (demoMode && inviteCode) {
+        // Demo 模式：使用服务端 API Key
+        console.log('[AI Generate] 使用 Demo 模式生成');
+        result = await generateMultiCharacterCardDemo({
+          inviteCode,
+          userPrompt: prompt,
+          theme: selectedTheme,
+          enableSearch,
+          wordCountSettings,
+          onProgress: handleProgress,
+        });
+      } else {
+        // 正常模式：使用用户配置的 API Key
+        result = await generateMultiCharacterCard(
+          prompt,
+          settings,
+          selectedTheme,
+          handleProgress,
+          enableSearch && supportsSearch,
+          wordCountSettings
+        );
+      }
 
       // 记录搜索来源（用于调试）
       if (result.searchSources && result.searchSources.length > 0) {
         console.log('[AI Generate] 搜索来源:', result.searchSources);
       }
 
-      // 如果是自定义主题，生成独特的风格模板
+      // 如果是自定义主题且不是 Demo 模式，生成独特的风格模板
       let customTemplates;
       const primaryChar = result.card.mainCharacters[0];
-      if (isCustomTheme && primaryChar) {
+      if (isCustomTheme && primaryChar && !demoMode) {
         handleProgress('正在生成专属风格...', 85);
         customTemplates = await generateCustomStyle(
           {
@@ -137,10 +253,23 @@ export function AIGenerateModal({ isOpen, onClose, onComplete }: AIGenerateModal
         activeContext: 'character',
       }));
 
-      onComplete(newCard.id);
+      // 保存生成的卡片ID并显示成功状态
+      setGeneratedCardId(newCard.id);
+      setProgress(100);
+      setDisplayProgress(100);
+      setStep('success');
+
+      // 如果是最小化状态，更新悬浮框状态
+      if (isMinimized) {
+        setFloatingStatus('success');
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : '生成失败，请重试');
       setStep('error');
+      // 如果是最小化状态，更新悬浮框状态
+      if (isMinimized) {
+        setFloatingStatus('error');
+      }
     }
   };
 
@@ -148,20 +277,137 @@ export function AIGenerateModal({ isOpen, onClose, onComplete }: AIGenerateModal
     setStep('input');
     setError('');
     setProgress(0);
+    setDisplayProgress(0);
+    setFloatingStatus('idle');
+    setIsMinimized(false);
+    setGeneratedCardId(null);
+  };
+
+  // 查看生成结果
+  const handleViewResult = () => {
+    if (generatedCardId) {
+      onComplete(generatedCardId);
+      handleClose();
+    }
   };
 
   const handleClose = () => {
+    // 如果正在生成，最小化到悬浮框而不是关闭
+    if (step === 'generating') {
+      handleMinimize();
+      return;
+    }
+    // 否则完全关闭
     setStep('input');
     setPrompt('');
     setTheme('auto');
     setError('');
     setProgress(0);
+    setDisplayProgress(0);
     setDetectedCharacters([]);
+    setFloatingStatus('idle');
+    setIsMinimized(false);
     onClose();
   };
 
-  // 未配置 API
-  if (!isConfigured()) {
+  // 处理去设置按钮
+  const handleGoToSettings = () => {
+    handleClose();
+    onOpenSettings();
+  };
+
+  // 验证邀请码
+  const handleVerifyInviteCode = async () => {
+    if (!inviteCodeInput.trim()) {
+      setInviteCodeError('请输入邀请码');
+      return;
+    }
+
+    setVerifyingCode(true);
+    setInviteCodeError('');
+
+    try {
+      const response = await fetch('/api/demo/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inviteCode: inviteCodeInput.trim() }),
+      });
+
+      const data = await response.json();
+
+      if (data.valid) {
+        // 保存邀请码到 store
+        useSettingsStore.getState().setDemoMode(true, inviteCodeInput.trim());
+        setShowInviteCodeInput(false);
+        setInviteCodeInput('');
+        // 邀请码有效，关闭弹框，用户可以重新点击 AI 生成
+      } else {
+        setInviteCodeError(data.error || '邀请码无效');
+      }
+    } catch {
+      setInviteCodeError('验证失败，请稍后重试');
+    } finally {
+      setVerifyingCode(false);
+    }
+  };
+
+  // 未配置 API 且不在 Demo 模式
+  if (!isConfigured() && !demoMode) {
+    // 显示邀请码输入框
+    if (showInviteCodeInput) {
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setShowInviteCodeInput(false)} />
+          <div className="relative bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
+            <div className="flex items-center gap-3 text-purple-600 mb-4">
+              <Wand2 className="w-6 h-6" />
+              <h2 className="text-lg font-semibold">抢先体验</h2>
+            </div>
+            <p className="text-gray-600 mb-4">
+              请输入邀请码以使用抢先体验功能
+            </p>
+            <input
+              type="text"
+              value={inviteCodeInput}
+              onChange={(e) => {
+                setInviteCodeInput(e.target.value);
+                setInviteCodeError('');
+              }}
+              placeholder="请输入邀请码..."
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent mb-2"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleVerifyInviteCode();
+              }}
+            />
+            {inviteCodeError && (
+              <p className="text-red-500 text-sm mb-3">{inviteCodeError}</p>
+            )}
+            <p className="text-xs text-gray-500 mb-4">
+              抢先体验使用 Gemini 3.0 Pro 模型
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => setShowInviteCodeInput(false)}>
+                取消
+              </Button>
+              <Button
+                onClick={handleVerifyInviteCode}
+                disabled={verifyingCode}
+                className="gap-2 bg-gradient-to-r from-purple-600 to-blue-600"
+              >
+                {verifyingCode ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Wand2 className="w-4 h-4" />
+                )}
+                确认
+              </Button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // 显示选择界面
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center">
         <div className="absolute inset-0 bg-black/50" onClick={handleClose} />
@@ -171,15 +417,22 @@ export function AIGenerateModal({ isOpen, onClose, onComplete }: AIGenerateModal
             <h2 className="text-lg font-semibold">需要配置 AI 服务</h2>
           </div>
           <p className="text-gray-600 mb-4">
-            请先在设置中配置 AI 服务的 API Key，才能使用 AI 生成功能。
+            请先配置 AI 服务的 API Key，或使用邀请码抢先体验。
           </p>
           <div className="flex justify-end gap-2">
             <Button variant="secondary" onClick={handleClose}>
               取消
             </Button>
-            <Button onClick={handleClose} className="gap-2">
+            <Button variant="secondary" onClick={handleGoToSettings} className="gap-2">
               <Settings className="w-4 h-4" />
               去设置
+            </Button>
+            <Button
+              onClick={() => setShowInviteCodeInput(true)}
+              className="gap-2 bg-gradient-to-r from-purple-600 to-blue-600"
+            >
+              <Wand2 className="w-4 h-4" />
+              抢先体验
             </Button>
           </div>
         </div>
@@ -187,9 +440,17 @@ export function AIGenerateModal({ isOpen, onClose, onComplete }: AIGenerateModal
     );
   }
 
+  // 处理遮罩层点击 - 生成中时最小化到悬浮框
+  const handleBackdropClick = () => {
+    handleClose(); // handleClose 会自动判断是最小化还是关闭
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50" onClick={handleClose} />
+      <div
+        className={`absolute inset-0 bg-black/50 ${step === 'generating' ? 'cursor-not-allowed' : ''}`}
+        onClick={handleBackdropClick}
+      />
 
       <div className="relative bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 overflow-hidden">
         {/* 标题栏 */}
@@ -201,6 +462,7 @@ export function AIGenerateModal({ isOpen, onClose, onComplete }: AIGenerateModal
           <button
             onClick={handleClose}
             className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
+            title={step === 'generating' ? '最小化到右下角' : '关闭'}
           >
             <X className="w-5 h-5 text-gray-500" />
           </button>
@@ -279,34 +541,79 @@ export function AIGenerateModal({ isOpen, onClose, onComplete }: AIGenerateModal
                 </button>
 
                 {showAdvanced && (
-                  <div className="mt-3 p-4 bg-gray-50 rounded-lg space-y-4">
-                    <RangeSlider
-                      label="回复长度"
-                      min={50}
-                      max={1000}
-                      step={50}
-                      value={wordCountSettings.replyLength}
-                      onChange={(range) => setWordCountSettings(prev => ({ ...prev, replyLength: range }))}
-                      unit="字"
-                    />
-                    <RangeSlider
-                      label="开场设计字数"
-                      min={100}
-                      max={800}
-                      step={50}
-                      value={wordCountSettings.opening}
-                      onChange={(range) => setWordCountSettings(prev => ({ ...prev, opening: range }))}
-                      unit="字"
-                    />
-                    <RangeSlider
-                      label="小剧场每场景字数"
-                      min={50}
-                      max={600}
-                      step={50}
-                      value={wordCountSettings.miniTheater}
-                      onChange={(range) => setWordCountSettings(prev => ({ ...prev, miniTheater: range }))}
-                      unit="字"
-                    />
+                  <div className="mt-3 space-y-4">
+                    {/* 聊天输出设定 - 发给 Mufy/酒馆的指令 */}
+                    <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                      <h4 className="text-sm font-medium text-blue-800 mb-3">
+                        聊天输出设定
+                        <span className="ml-2 text-xs font-normal text-blue-600">发给 Mufy/酒馆的指令</span>
+                      </h4>
+                      <RangeSlider
+                        label="每次回复字数"
+                        min={50}
+                        max={1000}
+                        step={50}
+                        value={wordCountSettings.replyLength}
+                        onChange={(range) => setWordCountSettings(prev => ({
+                          ...prev,
+                          replyLength: range
+                        }))}
+                        unit="字"
+                      />
+                      <p className="mt-2 text-xs text-blue-600">
+                        此设定会写入角色卡，告诉 Mufy/酒馆每次回复要输出多少字
+                      </p>
+                    </div>
+
+                    {/* 角色卡详细程度 - 控制生成内容 */}
+                    <div className="p-4 bg-amber-50 rounded-lg border border-amber-200">
+                      <h4 className="text-sm font-medium text-amber-800 mb-3">
+                        角色卡详细程度
+                        <span className="ml-2 text-xs font-normal text-amber-600">控制生成内容的丰富程度</span>
+                      </h4>
+                      <div className="space-y-2">
+                        <label className="flex items-center gap-3 p-2 rounded-lg cursor-pointer hover:bg-amber-100 transition-colors">
+                          <input
+                            type="radio"
+                            name="detailLevel"
+                            checked={wordCountSettings.detailLevel === 'concise'}
+                            onChange={() => setWordCountSettings(prev => ({ ...prev, detailLevel: 'concise' }))}
+                            className="w-4 h-4 text-amber-600 border-amber-300 focus:ring-amber-500"
+                          />
+                          <div>
+                            <span className="font-medium text-amber-900">简洁</span>
+                            <p className="text-xs text-amber-600">快速生成，内容精炼，适合快速预览</p>
+                          </div>
+                        </label>
+                        <label className="flex items-center gap-3 p-2 rounded-lg cursor-pointer hover:bg-amber-100 transition-colors">
+                          <input
+                            type="radio"
+                            name="detailLevel"
+                            checked={wordCountSettings.detailLevel === 'standard'}
+                            onChange={() => setWordCountSettings(prev => ({ ...prev, detailLevel: 'standard' }))}
+                            className="w-4 h-4 text-amber-600 border-amber-300 focus:ring-amber-500"
+                          />
+                          <div>
+                            <span className="font-medium text-amber-900">标准</span>
+                            <span className="ml-2 text-xs bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded">推荐</span>
+                            <p className="text-xs text-amber-600">平衡详细度和生成效率</p>
+                          </div>
+                        </label>
+                        <label className="flex items-center gap-3 p-2 rounded-lg cursor-pointer hover:bg-amber-100 transition-colors">
+                          <input
+                            type="radio"
+                            name="detailLevel"
+                            checked={wordCountSettings.detailLevel === 'detailed'}
+                            onChange={() => setWordCountSettings(prev => ({ ...prev, detailLevel: 'detailed' }))}
+                            className="w-4 h-4 text-amber-600 border-amber-300 focus:ring-amber-500"
+                          />
+                          <div>
+                            <span className="font-medium text-amber-900">详细</span>
+                            <p className="text-xs text-amber-600">深度沉浸，内容丰富，适合精品角色</p>
+                          </div>
+                        </label>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -324,15 +631,67 @@ export function AIGenerateModal({ isOpen, onClose, onComplete }: AIGenerateModal
 
           {/* 生成中 */}
           {step === 'generating' && (
-            <div className="py-8 text-center">
-              <Loader2 className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
-              <p className="text-gray-600 mb-2">{progressText || '正在生成...'}</p>
-              <div className="w-full bg-gray-200 rounded-full h-2">
+            <div className="py-6">
+              {/* 动画图标 */}
+              <div className="flex justify-center mb-4">
+                <div className="relative">
+                  <Loader2 className="w-14 h-14 text-blue-600 animate-spin" />
+                  <Wand2 className="w-6 h-6 text-purple-500 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" />
+                </div>
+              </div>
+
+              {/* 主进度文本 */}
+              <p className="text-gray-800 font-medium text-center mb-1">
+                {progressText || '正在生成角色卡...'}
+              </p>
+
+              {/* 阶段提示 */}
+              <p className="text-gray-500 text-sm text-center mb-4">
+                {displayProgress < 30 && '准备中...'}
+                {displayProgress >= 30 && displayProgress < 50 && 'AI 正在构思角色设定...'}
+                {displayProgress >= 50 && displayProgress < 70 && 'AI 正在生成人设和对话...'}
+                {displayProgress >= 70 && displayProgress < 85 && 'AI 正在完善细节内容...'}
+                {displayProgress >= 85 && displayProgress < 95 && '即将完成...'}
+                {displayProgress >= 95 && '正在整理结果...'}
+              </p>
+
+              {/* 进度条 */}
+              <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
                 <div
-                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${progress}%` }}
+                  className="bg-gradient-to-r from-purple-600 to-blue-600 h-2.5 rounded-full transition-all duration-500 ease-out"
+                  style={{ width: `${displayProgress}%` }}
                 />
               </div>
+
+              {/* 百分比显示 */}
+              <p className="text-gray-400 text-xs text-center mt-2">
+                {Math.round(displayProgress)}%
+              </p>
+
+              {/* 提示信息 */}
+              <p className="text-gray-400 text-xs text-center mt-3">
+                生成过程需要 30-60 秒，请耐心等待
+              </p>
+            </div>
+          )}
+
+          {/* 成功状态 */}
+          {step === 'success' && (
+            <div className="py-8">
+              {/* 成功图标 */}
+              <div className="flex justify-center mb-4">
+                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
+                  <CheckCircle className="w-10 h-10 text-green-600" />
+                </div>
+              </div>
+
+              {/* 成功文本 */}
+              <p className="text-gray-800 font-semibold text-lg text-center mb-2">
+                生成完成！
+              </p>
+              <p className="text-gray-500 text-sm text-center">
+                角色卡已成功生成，点击下方按钮查看
+              </p>
             </div>
           )}
 
@@ -368,7 +727,17 @@ export function AIGenerateModal({ isOpen, onClose, onComplete }: AIGenerateModal
 
           {step === 'generating' && (
             <Button variant="secondary" onClick={handleClose}>
-              取消
+              最小化
+            </Button>
+          )}
+
+          {step === 'success' && (
+            <Button
+              onClick={handleViewResult}
+              className="gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
+            >
+              <CheckCircle className="w-4 h-4" />
+              查看角色卡
             </Button>
           )}
 
@@ -384,6 +753,17 @@ export function AIGenerateModal({ isOpen, onClose, onComplete }: AIGenerateModal
           )}
         </div>
       </div>
+
+      {/* 悬浮进度框 - 当最小化且有进度时显示 */}
+      <FloatingProgress
+        isVisible={isMinimized && floatingStatus !== 'idle'}
+        status={floatingStatus}
+        progress={displayProgress}
+        progressText={progressText}
+        error={error}
+        onExpand={handleExpand}
+        onDismiss={handleDismissFloating}
+      />
     </div>
   );
 }

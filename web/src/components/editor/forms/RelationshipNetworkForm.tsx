@@ -13,11 +13,13 @@ import {
   CharacterRelationship,
   UserRelationship,
   MainCharacter,
+  SecondaryCharacter,
 } from '../../../types/multi-character-card';
 
 interface RelationshipNetworkFormProps {
   data: RelationshipNetwork;
   characters: MainCharacter[];
+  secondaryCharacters?: SecondaryCharacter[];
   onChange: (data: RelationshipNetwork) => void;
 }
 
@@ -44,31 +46,52 @@ const relationshipTypeOptions = [
 export function RelationshipNetworkForm({
   data,
   characters,
+  secondaryCharacters = [],
   onChange,
 }: RelationshipNetworkFormProps) {
+  // 合并所有角色（主角 + 副角色）
+  const allCharacters = [
+    ...characters.map((c) => ({
+      id: c.id,
+      name: c.characterInfo.name || '未命名角色',
+      type: 'main' as const,
+    })),
+    ...secondaryCharacters.map((c) => ({
+      id: c.id,
+      name: c.name || '未命名副角色',
+      type: 'secondary' as const,
+    })),
+  ];
+
   // 获取角色名称
   const getCharacterName = (id: string) => {
-    const char = characters.find((c) => c.id === id);
-    return char?.characterInfo.name || '未命名角色';
+    const char = allCharacters.find((c) => c.id === id);
+    return char?.name || '未命名角色';
   };
 
-  // 角色选项
+  // 角色选项（区分主角和副角色）
   const characterOptions = [
     { value: '', label: '请选择角色' },
+    ...(characters.length > 0 ? [{ value: '', label: '── 主角 ──', disabled: true }] : []),
     ...characters.map((c) => ({
       value: c.id,
       label: c.characterInfo.name || '未命名角色',
+    })),
+    ...(secondaryCharacters.length > 0 ? [{ value: '', label: '── 副角色 ──', disabled: true }] : []),
+    ...secondaryCharacters.map((c) => ({
+      value: c.id,
+      label: c.name || '未命名副角色',
     })),
   ];
 
   // ===== 角色间关系操作 =====
 
   const addRelationship = () => {
-    if (characters.length < 2) return;
+    if (allCharacters.length < 2) return;
 
     const newRelationship: CharacterRelationship = {
-      characterId1: characters[0]?.id || '',
-      characterId2: characters[1]?.id || '',
+      characterId1: allCharacters[0]?.id || '',
+      characterId2: allCharacters[1]?.id || '',
       labelFrom1To2: '',
       labelFrom2To1: '',
       relationshipType: '',
@@ -138,8 +161,8 @@ export function RelationshipNetworkForm({
     });
   };
 
-  // 获取未添加用户关系的角色
-  const charactersWithoutUserRelation = characters.filter(
+  // 获取未添加用户关系的角色（包括主角和副角色）
+  const charactersWithoutUserRelation = allCharacters.filter(
     (c) => !data.userRelationships.some((r) => r.characterId === c.id)
   );
 
@@ -157,7 +180,7 @@ export function RelationshipNetworkForm({
             <Users className="w-4 h-4" />
             角色间关系
           </h4>
-          {characters.length >= 2 && (
+          {allCharacters.length >= 2 && (
             <button
               onClick={addRelationship}
               className="flex items-center gap-1 px-2 py-1 text-xs text-blue-600 hover:bg-blue-50 rounded transition-colors"
@@ -168,9 +191,9 @@ export function RelationshipNetworkForm({
           )}
         </div>
 
-        {characters.length < 2 ? (
+        {allCharacters.length < 2 ? (
           <div className="p-4 bg-gray-50 rounded-lg text-center text-gray-500 text-sm">
-            需要至少 2 个角色才能定义角色间关系
+            需要至少 2 个角色才能定义角色间关系（可添加主角或副角色）
           </div>
         ) : data.relationships.length === 0 ? (
           <div className="p-4 bg-gray-50 rounded-lg text-center text-gray-500 text-sm">
@@ -283,7 +306,7 @@ export function RelationshipNetworkForm({
                 { value: '', label: '添加角色...' },
                 ...charactersWithoutUserRelation.map((c) => ({
                   value: c.id,
-                  label: c.characterInfo.name || '未命名角色',
+                  label: `${c.name}${c.type === 'secondary' ? ' (副)' : ''}`,
                 })),
               ]}
               value=""

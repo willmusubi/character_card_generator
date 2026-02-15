@@ -4,16 +4,21 @@ import { AppSettings, AIProvider, DEFAULT_SETTINGS, PROVIDER_CONFIGS } from '../
 
 interface SettingsStore {
   settings: AppSettings;
+  demoMode: boolean;
+  inviteCode: string;
   updateSettings: (updates: Partial<AppSettings>) => void;
   setProvider: (provider: AIProvider) => void;
   resetSettings: () => void;
   isConfigured: () => boolean;
+  setDemoMode: (enabled: boolean, code?: string) => void;
 }
 
 export const useSettingsStore = create<SettingsStore>()(
   persist(
     (set, get) => ({
       settings: DEFAULT_SETTINGS,
+      demoMode: false,
+      inviteCode: '',
 
       updateSettings: (updates) => {
         set((state) => ({
@@ -35,17 +40,24 @@ export const useSettingsStore = create<SettingsStore>()(
       },
 
       resetSettings: () => {
-        set({ settings: DEFAULT_SETTINGS });
+        set({ settings: DEFAULT_SETTINGS, demoMode: false, inviteCode: '' });
       },
 
       isConfigured: () => {
         const { settings } = get();
         return settings.apiKey.trim().length > 0;
       },
+
+      setDemoMode: (enabled, code) => {
+        set({
+          demoMode: enabled,
+          inviteCode: code || '',
+        });
+      },
     }),
     {
       name: 'mufy-ai-settings',
-      version: 1,
+      version: 2,  // 升级版本以触发迁移
     }
   )
 );

@@ -184,9 +184,14 @@ export function extractGeminiToolCalls(response: {
   }));
 }
 
+// 后端代理服务器地址（与 ai-generator.ts 保持一致）
+const API_PROXY_SERVER = import.meta.env.DEV
+  ? 'http://localhost:3001'  // 本地开发
+  : '';                       // Vercel 生产环境
+
 // 执行搜索工具
 export async function executeSearchTool(query: string): Promise<SearchResponse> {
-  const response = await fetch('http://localhost:3001/api/search', {
+  const response = await fetch(`${API_PROXY_SERVER}/api/search`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

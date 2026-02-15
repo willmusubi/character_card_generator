@@ -8,12 +8,36 @@ import {
 } from '../types/multi-character-card';
 import { SYSTEM_PROMPT, SEARCH_SYSTEM_PROMPT, GENERATE_ALL_PROMPT, MODULE_PROMPTS } from '../data/ai-prompts';
 
-// 字数范围设置
+// 角色卡详细程度等级
+export type DetailLevel = 'concise' | 'standard' | 'detailed';
+
+// 简化的字数设置
 export interface WordCountSettings {
-  replyLength: WordCountRange;
-  opening: WordCountRange;
-  miniTheater: WordCountRange;
+  replyLength: WordCountRange;  // 聊天输出字数（发给 Mufy/酒馆）
+  detailLevel: DetailLevel;     // 角色卡详细程度
 }
+
+// 详细程度预设值映射
+export const DETAIL_PRESETS = {
+  concise: {
+    persona: { min: 200, max: 400 },
+    backstory: { min: 100, max: 200 },
+    opening: { min: 150, max: 300 },
+    miniTheater: { min: 100, max: 200 },
+  },
+  standard: {
+    persona: { min: 400, max: 600 },
+    backstory: { min: 200, max: 400 },
+    opening: { min: 300, max: 500 },
+    miniTheater: { min: 200, max: 400 },
+  },
+  detailed: {
+    persona: { min: 600, max: 1000 },
+    backstory: { min: 400, max: 600 },
+    opening: { min: 500, max: 800 },
+    miniTheater: { min: 400, max: 600 },
+  },
+} as const;
 import {
   OPENAI_TOOLS,
   CLAUDE_TOOLS,
@@ -48,7 +72,10 @@ interface APIResponse {
 }
 
 // 后端代理服务器地址
-const API_PROXY_SERVER = 'http://localhost:3001';
+// 本地开发使用 localhost:3001，Vercel 部署使用相对路径
+const API_PROXY_SERVER = import.meta.env.DEV
+  ? 'http://localhost:3001'  // 本地开发
+  : '';                       // Vercel 生产环境（使用相对路径）
 
 // 获取代理 URL
 function getProxyUrl(provider: string, path: string): string {
@@ -646,22 +673,34 @@ export async function generateAllModules(
 
   const systemPrompt = shouldSearch ? SEARCH_SYSTEM_PROMPT : SYSTEM_PROMPT;
 
+  // 获取详细程度预设值
+  const detailLevel = wordCountSettings?.detailLevel || 'standard';
+  const detailPreset = DETAIL_PRESETS[detailLevel];
+
   // 构建字数要求说明
   const wordCountInstructions = wordCountSettings
     ? `\n\n**【最重要】字数要求**
 请严格遵守以下字数要求（统计纯文本字数，不包括HTML标签、CSS样式代码）：
 
-1. **outputSetting.replyLength** = "${wordCountSettings.replyLength.min}-${wordCountSettings.replyLength.max}字"
+## 一、聊天输出设定（写入 outputSetting，发给聊天 app 的指令）
+**outputSetting.replyLength** = "${wordCountSettings.replyLength.min}-${wordCountSettings.replyLength.max}字"
 
-2. **opening 开场设计**：纯文本内容总计 ${wordCountSettings.opening.min}-${wordCountSettings.opening.max} 字
-   - sceneDescription（场景描述）：至少 ${Math.floor(wordCountSettings.opening.min * 0.3)} 字，详细描写环境、氛围
-   - firstDialogue（开场白）：至少 ${Math.floor(wordCountSettings.opening.min * 0.3)} 字，体现角色性格
-   - innerThought（内心独白）：至少 ${Math.floor(wordCountSettings.opening.min * 0.2)} 字，展现角色心理
+## 二、角色卡内容字数（详细程度：${detailLevel === 'concise' ? '简洁' : detailLevel === 'standard' ? '标准' : '详细'}）
 
-3. **miniTheater 小剧场**：每个场景 ${wordCountSettings.miniTheater.min}-${wordCountSettings.miniTheater.max} 字
-   - scene1Dialogue + scene1Action：总计 ${wordCountSettings.miniTheater.min}-${wordCountSettings.miniTheater.max} 字
-   - scene2Dialogue + scene2Action：总计 ${wordCountSettings.miniTheater.min}-${wordCountSettings.miniTheater.max} 字
-   - scene3Dialogue + scene3Action：总计 ${wordCountSettings.miniTheater.min}-${wordCountSettings.miniTheater.max} 字
+1. **persona 人设**：总计 ${detailPreset.persona.min}-${detailPreset.persona.max} 字
+   - appearance（外貌描述）：详细具体
+   - personalities（性格描述）：丰富立体
+   - backstory（背景故事）：${detailPreset.backstory.min}-${detailPreset.backstory.max} 字
+
+2. **opening 开场设计**：纯文本内容总计 ${detailPreset.opening.min}-${detailPreset.opening.max} 字
+   - sceneDescription（场景描述）：至少 ${Math.floor(detailPreset.opening.min * 0.3)} 字，详细描写环境、氛围
+   - firstDialogue（开场白）：至少 ${Math.floor(detailPreset.opening.min * 0.3)} 字，体现角色性格
+   - innerThought（内心独白）：至少 ${Math.floor(detailPreset.opening.min * 0.2)} 字，展现角色心理
+
+3. **miniTheater 小剧场**：每个场景 ${detailPreset.miniTheater.min}-${detailPreset.miniTheater.max} 字
+   - scene1Dialogue + scene1Action：总计 ${detailPreset.miniTheater.min}-${detailPreset.miniTheater.max} 字
+   - scene2Dialogue + scene2Action：总计 ${detailPreset.miniTheater.min}-${detailPreset.miniTheater.max} 字
+   - scene3Dialogue + scene3Action：总计 ${detailPreset.miniTheater.min}-${detailPreset.miniTheater.max} 字
 
 **重要提醒**：
 - 请务必生成足够丰富的内容，每个场景都要有详细的对话和动作描写
@@ -681,15 +720,36 @@ export async function generateAllModules(
     onProgress?.('正在搜索角色资料...', 5);
   }
 
-  onProgress?.('正在生成角色卡...', shouldSearch ? 20 : 10);
+  onProgress?.('正在连接 AI 服务...', shouldSearch ? 15 : 8);
 
-  const response = await callAPIWithSearch(messages, settings, enableSearch, onProgress);
+  // 启动一个模拟进度更新，在等待 API 响应时显示活动
+  let progressValue = shouldSearch ? 20 : 12;
+  const progressInterval = setInterval(() => {
+    progressValue = Math.min(progressValue + 2, 75); // 最多到75%
+    onProgress?.('AI 正在生成角色内容...', progressValue);
+  }, 3000); // 每3秒更新一次
 
-  onProgress?.('正在解析结果...', 90);
+  let response: APIResponse;
+  let data: Record<string, unknown>;
 
-  const data = parseJSONResponse(response.content);
+  try {
+    onProgress?.('AI 正在生成角色内容...', shouldSearch ? 25 : 15);
 
-  onProgress?.('完成', 100);
+    response = await callAPIWithSearch(messages, settings, enableSearch, onProgress);
+
+    clearInterval(progressInterval);
+
+    onProgress?.('正在解析生成结果...', 85);
+
+    data = parseJSONResponse(response.content);
+
+    onProgress?.('正在整理角色数据...', 95);
+  } catch (error) {
+    clearInterval(progressInterval);
+    throw error;
+  }
+
+  onProgress?.('生成完成！', 100);
 
   // 合并字数范围设置到生成的数据中
   const generatedOutputSetting = data.outputSetting as CharacterCard['outputSetting'];
@@ -707,13 +767,13 @@ export async function generateAllModules(
   const generatedMiniTheater = data.miniTheater as CharacterCard['miniTheater'];
   const miniTheater: CharacterCard['miniTheater'] = {
     ...generatedMiniTheater,
-    wordCountRange: wordCountSettings?.miniTheater || { min: 200, max: 400 },
+    wordCountRange: detailPreset.miniTheater,
   };
 
   const generatedOpening = data.opening as CharacterCard['opening'];
   const opening: CharacterCard['opening'] = {
     ...generatedOpening,
-    wordCountRange: wordCountSettings?.opening || { min: 300, max: 500 },
+    wordCountRange: detailPreset.opening,
   };
 
   // 处理角色信息（包含新字段）
@@ -1376,16 +1436,25 @@ export async function generateMultiCharacterCard(
   }
 
   // 多角色场景
-  onProgress?.('检测到多个角色，正在生成...', 5);
+  onProgress?.(`检测到 ${detectedCharacters.length} 个角色：${detectedCharacters.join('、')}`, 5);
 
   const systemPrompt = shouldSearch ? `${MULTI_CHARACTER_SYSTEM_PROMPT}\n\n如果需要了解角色的详细信息，请使用搜索工具。` : MULTI_CHARACTER_SYSTEM_PROMPT;
+
+  // 获取详细程度预设值（用于多角色）
+  const multiDetailLevel = wordCountSettings?.detailLevel || 'standard';
+  const multiDetailPreset = DETAIL_PRESETS[multiDetailLevel];
 
   // 构建字数要求
   const wordCountInstructions = wordCountSettings
     ? `\n\n**【重要】字数要求**
-- 每个角色的 opening.sceneDescription: ${wordCountSettings.opening.min}-${wordCountSettings.opening.max}字
-- 每个角色的 miniTheater 每场景: ${wordCountSettings.miniTheater.min}-${wordCountSettings.miniTheater.max}字
-- outputSetting.replyLength: ${wordCountSettings.replyLength.min}-${wordCountSettings.replyLength.max}字`
+## 聊天输出设定
+- outputSetting.replyLength: ${wordCountSettings.replyLength.min}-${wordCountSettings.replyLength.max}字
+
+## 角色卡内容详细程度（${multiDetailLevel === 'concise' ? '简洁' : multiDetailLevel === 'standard' ? '标准' : '详细'}）
+- 每个角色的 persona: ${multiDetailPreset.persona.min}-${multiDetailPreset.persona.max}字
+- 每个角色的 backstory: ${multiDetailPreset.backstory.min}-${multiDetailPreset.backstory.max}字
+- 每个角色的 opening.sceneDescription: ${multiDetailPreset.opening.min}-${multiDetailPreset.opening.max}字
+- 每个角色的 miniTheater 每场景: ${multiDetailPreset.miniTheater.min}-${multiDetailPreset.miniTheater.max}字`
     : '';
 
   const messages: Message[] = [
@@ -1423,15 +1492,36 @@ mainCharacters 数组必须包含 ${detectedCharacters.length} 个角色对象�
     onProgress?.('正在搜索角色资料...', 10);
   }
 
-  onProgress?.('正在生成多角色卡...', shouldSearch ? 30 : 20);
+  onProgress?.('正在连接 AI 服务...', shouldSearch ? 18 : 12);
 
-  const response = await callAPIWithSearch(messages, settings, enableSearch, onProgress);
+  // 启动一个模拟进度更新，在等待 API 响应时显示活动
+  let progressValue = shouldSearch ? 25 : 18;
+  const progressInterval = setInterval(() => {
+    progressValue = Math.min(progressValue + 2, 75);
+    onProgress?.(`正在生成 ${detectedCharacters.length} 个角色的数据...`, progressValue);
+  }, 3000);
 
-  onProgress?.('正在解析结果...', 90);
+  let response: APIResponse;
+  let data: Record<string, unknown>;
 
-  const data = parseJSONResponse(response.content);
+  try {
+    onProgress?.(`正在生成 ${detectedCharacters.length} 个角色的数据...`, shouldSearch ? 30 : 22);
 
-  onProgress?.('完成', 100);
+    response = await callAPIWithSearch(messages, settings, enableSearch, onProgress);
+
+    clearInterval(progressInterval);
+
+    onProgress?.('正在解析多角色数据...', 85);
+
+    data = parseJSONResponse(response.content);
+
+    onProgress?.('正在整理角色关系网络...', 92);
+  } catch (error) {
+    clearInterval(progressInterval);
+    throw error;
+  }
+
+  onProgress?.('多角色卡生成完成！', 100);
 
   // 构建完整的 MultiCharacterCard
   const multiCard = buildMultiCharacterCard(data, theme, wordCountSettings);
@@ -1503,6 +1593,10 @@ function buildMultiCharacterCard(
 ): MultiCharacterCard {
   const baseCard = createEmptyMultiCharacterCard();
 
+  // 获取详细程度预设
+  const buildDetailLevel = wordCountSettings?.detailLevel || 'standard';
+  const buildDetailPreset = DETAIL_PRESETS[buildDetailLevel];
+
   // 处理主角列表
   const mainCharacters: MainCharacter[] = (data.mainCharacters || []).map(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1536,7 +1630,7 @@ function buildMultiCharacterCard(
         miniTheater: {
           ...baseChar.miniTheater,
           ...char.miniTheater,
-          wordCountRange: wordCountSettings?.miniTheater || { min: 200, max: 400 },
+          wordCountRange: buildDetailPreset.miniTheater,
         },
       };
     }
@@ -1574,7 +1668,7 @@ function buildMultiCharacterCard(
     opening: {
       ...baseCard.opening,
       ...data.opening,
-      wordCountRange: wordCountSettings?.opening || { min: 300, max: 500 },
+      wordCountRange: buildDetailPreset.opening,
     },
     openingExtension: data.openingExtension || baseCard.openingExtension,
     relationshipNetwork: {
@@ -1604,4 +1698,109 @@ function buildMultiCharacterCard(
     mainCharacters,
     secondaryCharacters: data.secondaryCharacters || [],
   };
+}
+
+// ============== Demo 模式生成（使用服务端 API Key） ==============
+
+// Demo 模式生成参数
+export interface DemoGenerateOptions {
+  inviteCode: string;
+  userPrompt: string;
+  theme: ThemeType;
+  enableSearch?: boolean;
+  wordCountSettings?: WordCountSettings;
+  onProgress?: (module: string, progress: number) => void;
+}
+
+// Demo 模式生成多角色卡
+export async function generateMultiCharacterCardDemo(
+  options: DemoGenerateOptions
+): Promise<MultiCharacterGenerationResult> {
+  const { inviteCode, userPrompt, theme, enableSearch = true, wordCountSettings, onProgress } = options;
+
+  onProgress?.('正在连接 AI 服务...', 10);
+
+  // 获取详细程度预设值
+  const detailLevel = wordCountSettings?.detailLevel || 'standard';
+  const detailPreset = DETAIL_PRESETS[detailLevel];
+
+  // 构建字数要求说明
+  const wordCountInstructions = wordCountSettings
+    ? `\n\n**【最重要】字数要求**
+请严格遵守以下字数要求（统计纯文本字数，不包括HTML标签、CSS样式代码）：
+
+## 一、聊天输出设定（写入 outputSetting，发给聊天 app 的指令）
+**outputSetting.replyLength** = "${wordCountSettings.replyLength.min}-${wordCountSettings.replyLength.max}字"
+
+## 二、角色卡内容字数（详细程度：${detailLevel === 'concise' ? '简洁' : detailLevel === 'standard' ? '标准' : '详细'}）
+
+1. **persona 人设**：总计 ${detailPreset.persona.min}-${detailPreset.persona.max} 字
+2. **opening 开场设计**：纯文本内容总计 ${detailPreset.opening.min}-${detailPreset.opening.max} 字
+3. **miniTheater 小剧场**：每个场景 ${detailPreset.miniTheater.min}-${detailPreset.miniTheater.max} 字`
+    : '';
+
+  // 构建 Gemini 格式的消息
+  const systemPrompt = enableSearch ? SEARCH_SYSTEM_PROMPT : SYSTEM_PROMPT;
+  const userContent = `${GENERATE_ALL_PROMPT}\n\n用户描述：\n${userPrompt}\n\n选择的主题风格：${theme}${wordCountInstructions}`;
+
+  const contents = [
+    {
+      role: 'user',
+      parts: [{ text: userContent }],
+    },
+  ];
+
+  const systemInstruction = { parts: [{ text: systemPrompt }] };
+
+  // 启动进度模拟
+  let progressValue = 15;
+  const progressInterval = setInterval(() => {
+    progressValue = Math.min(progressValue + 2, 75);
+    onProgress?.('AI 正在生成角色内容...', progressValue);
+  }, 3000);
+
+  try {
+    onProgress?.('AI 正在生成角色内容...', 20);
+
+    // 调用 Demo 模式 API
+    const response = await fetch('/api/demo/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        inviteCode,
+        contents,
+        systemInstruction,
+        enableSearch,
+      }),
+    });
+
+    clearInterval(progressInterval);
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Demo 模式生成失败');
+    }
+
+    const result = await response.json();
+
+    onProgress?.('正在解析生成结果...', 85);
+
+    // 解析 JSON 响应
+    const data = parseJSONResponse(result.content);
+
+    onProgress?.('正在整理角色数据...', 95);
+
+    // 构建 MultiCharacterCard
+    const multiCard = buildMultiCharacterCard(data, theme, wordCountSettings);
+
+    onProgress?.('生成完成！', 100);
+
+    return {
+      card: multiCard,
+      searchSources: result.searchSources,
+    };
+  } catch (error) {
+    clearInterval(progressInterval);
+    throw error;
+  }
 }

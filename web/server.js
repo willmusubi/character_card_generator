@@ -1,13 +1,106 @@
 import express from 'express';
 import cors from 'cors';
-import { ProxyAgent, fetch as undiciFetch } from 'undici';
+import { spawn } from 'child_process';
+import { writeFileSync, unlinkSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 
 const app = express();
 const PORT = 3001;
 
 // Clash VPN 代理
 const VPN_PROXY = 'http://127.0.0.1:7890';
-const proxyAgent = new ProxyAgent(VPN_PROXY);
+
+// 延迟函数
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+// 使用 spawn + curl 发送请求（带重试）
+async function curlRequest(url, method, headers, body, useVPN = true, maxRetries = 5) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const result = await curlRequestOnce(url, method, headers, body, useVPN);
+      return result;
+    } catch (error) {
+      console.error(`[curl] 尝试 ${attempt}/${maxRetries} 失败:`, error.message);
+      if (attempt < maxRetries) {
+        const waitTime = attempt * 3000; // 3秒, 6秒, 9秒, 12秒
+        console.log(`[curl] 等待 ${waitTime/1000}s 后重试...`);
+        await delay(waitTime);
+      } else {
+        throw error;
+      }
+    }
+  }
+}
+
+// 单次 curl 请求
+function curlRequestOnce(url, method, headers, body, useVPN = true) {
+  return new Promise((resolve, reject) => {
+    let tempFile = null;
+
+    const args = [
+      '-s',                    // 静默模式
+      '-S',                    // 显示错误信息
+      '-w', '\\n%{http_code}', // 输出 HTTP 状态码
+      '--max-time', '180',     // 3分钟超时
+      '--connect-timeout', '30', // 连接超时30秒
+      '--http1.1',             // 强制 HTTP/1.1
+      '-H', 'Connection: close', // 禁用 keep-alive
+      '-X', method,
+    ];
+
+    // 使用 VPN 代理
+    if (useVPN) {
+      args.push('-x', VPN_PROXY);
+    }
+
+    // 添加 headers
+    for (const [key, value] of Object.entries(headers)) {
+      args.push('-H', `${key}: ${value}`);
+    }
+
+    // 使用临时文件传递 body（比 stdin 更稳定）
+    if (body) {
+      tempFile = join(tmpdir(), `curl-body-${Date.now()}-${Math.random().toString(36).slice(2)}.json`);
+      writeFileSync(tempFile, body, 'utf8');
+      args.push('-d', `@${tempFile}`);
+    }
+
+    args.push(url);
+
+    const curl = spawn('curl', args);
+    let stdout = '';
+    let stderr = '';
+
+    curl.stdout.on('data', (data) => { stdout += data; });
+    curl.stderr.on('data', (data) => { stderr += data; });
+
+    curl.on('close', (code) => {
+      // 清理临时文件
+      if (tempFile) {
+        try { unlinkSync(tempFile); } catch (e) { /* ignore */ }
+      }
+
+      if (code === 0) {
+        // 解析响应和状态码
+        const lines = stdout.trim().split('\n');
+        const statusCode = parseInt(lines.pop(), 10);
+        const responseBody = lines.join('\n');
+        resolve({ ok: statusCode >= 200 && statusCode < 300, status: statusCode, data: responseBody });
+      } else {
+        const errorMsg = stderr.trim() || `exit code ${code}`;
+        reject(new Error(`curl error: ${errorMsg}`));
+      }
+    });
+
+    curl.on('error', (err) => {
+      if (tempFile) {
+        try { unlinkSync(tempFile); } catch (e) { /* ignore */ }
+      }
+      reject(err);
+    });
+  });
+}
 
 // 启用 CORS 和 JSON 解析
 app.use(cors());
@@ -20,54 +113,39 @@ app.get('/health', (req, res) => {
 
 // 通用的 API 转发函数
 async function proxyRequest(targetUrl, req, res, useVPN = true) {
+  const logPrefix = `[Proxy]`;
+
+  // 构建请求头
+  const headers = {
+    'Content-Type': 'application/json',
+  };
+
+  if (req.headers['authorization']) {
+    headers['Authorization'] = req.headers['authorization'];
+  }
+  if (req.headers['x-api-key']) {
+    headers['x-api-key'] = req.headers['x-api-key'];
+  }
+  if (req.headers['anthropic-version']) {
+    headers['anthropic-version'] = req.headers['anthropic-version'];
+  }
+
+  const bodyStr = req.method !== 'GET' ? JSON.stringify(req.body) : undefined;
+
+  console.log(`${logPrefix} ${req.method} ${targetUrl.substring(0, 80)}... (${useVPN ? 'VPN/curl' : 'direct'})`);
+
   try {
-    console.log(`[Proxy] ${req.method} ${targetUrl}`);
+    const result = await curlRequest(targetUrl, req.method, headers, bodyStr, useVPN);
 
-    // 构建请求头，只保留必要的头
-    const headers = {
-      'Content-Type': 'application/json',
-    };
-
-    // 从原请求复制认证相关的头
-    if (req.headers['authorization']) {
-      headers['Authorization'] = req.headers['authorization'];
-    }
-    if (req.headers['x-api-key']) {
-      headers['x-api-key'] = req.headers['x-api-key'];
-    }
-    if (req.headers['anthropic-version']) {
-      headers['anthropic-version'] = req.headers['anthropic-version'];
-    }
-
-    const fetchOptions = {
-      method: req.method,
-      headers,
-      body: req.method !== 'GET' ? JSON.stringify(req.body) : undefined,
-    };
-
-    // 如果需要 VPN，使用 undici 的 ProxyAgent
-    if (useVPN) {
-      fetchOptions.dispatcher = proxyAgent;
-    }
-
-    // 使用 undici fetch
-    const response = await undiciFetch(targetUrl, fetchOptions);
-    const data = await response.text();
-
-    console.log(`[Proxy] Response status: ${response.status}`);
-
-    // 如果是错误响应，打印详细信息
-    if (response.status >= 400) {
-      console.error(`[Proxy] Error response body:`, data.substring(0, 500));
-    }
+    console.log(`${logPrefix} ✅ 成功 (status: ${result.status})`);
 
     // 转发响应
-    res.status(response.status);
-    res.set('Content-Type', response.headers.get('content-type') || 'application/json');
-    res.send(data);
+    res.status(result.status);
+    res.set('Content-Type', 'application/json');
+    res.send(result.data);
   } catch (error) {
-    console.error(`[Proxy] Error:`, error.message);
-    res.status(500).json({ error: error.message });
+    console.error(`${logPrefix} ❌ 失败:`, error.message);
+    res.status(500).json({ error: `请求失败: ${error.message}` });
   }
 }
 
@@ -111,18 +189,13 @@ app.use('/api/qwen', (req, res) => {
 // 使用 DuckDuckGo 搜索（通过 html.duckduckgo.com）
 async function duckduckgoSearch(query, maxResults = 5) {
   try {
-    // 使用 DuckDuckGo HTML 版本进行搜索
     const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
 
-    const response = await undiciFetch(searchUrl, {
-      method: 'GET',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      },
-      dispatcher: proxyAgent, // 使用 VPN
-    });
+    const result = await curlRequest(searchUrl, 'GET', {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    }, null, true);
 
-    const html = await response.text();
+    const html = result.data;
 
     // 简单解析搜索结果
     const results = [];
@@ -140,7 +213,6 @@ async function duckduckgoSearch(query, maxResults = 5) {
     }
 
     while ((match = snippetRegex.exec(html)) !== null && snippets.length < maxResults) {
-      // 清理 HTML 标签
       const snippet = match[1].replace(/<[^>]*>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
       snippets.push(snippet);
     }
@@ -165,19 +237,13 @@ async function baiduSearch(query, maxResults = 5) {
   try {
     const searchUrl = `https://www.baidu.com/s?wd=${encodeURIComponent(query)}`;
 
-    const response = await undiciFetch(searchUrl, {
-      method: 'GET',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      },
-      // 百度不需要 VPN
-    });
+    const result = await curlRequest(searchUrl, 'GET', {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    }, null, false);
 
-    const html = await response.text();
+    const html = result.data;
 
-    // 简单解析百度搜索结果
     const results = [];
-    // 百度的结果结构比较复杂，这里做简化处理
     const titleRegex = /<h3[^>]*class="[^"]*t[^"]*"[^>]*>[\s\S]*?<a[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/g;
 
     let match;
